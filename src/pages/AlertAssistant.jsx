@@ -36,7 +36,7 @@ export default function AlertAssistant() {
         </section>
 
         {/* Right: Chat (≈40%) */}
-        <aside className="w-full max-w-[560px] border-l bg-white flex flex-col">
+        <aside className="flex-none basis-[40%] min-w-[360px] border-l bg-white flex flex-col">
           <ChatWithAgents />
         </aside>
       </div>
