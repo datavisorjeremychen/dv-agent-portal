@@ -9,7 +9,7 @@ import { CheckCircle2, Circle, Play, Send, Loader2 } from "lucide-react";
  * - Secondary agent: Unauthorized Transaction Review Decision Agent (auto-start)
  */
 
-function ChatWithAgents() {
+function AlertAssistant() {
   const [messages, setMessages] = useState(() => [
     sysMsg(
       "ATO risk detected by triggered rules. Primary agent **ATO Review Decision Agent** activated. Secondary agent **Unauthorized Transaction Review Decision Agent** also started due to related fraud type signals."
