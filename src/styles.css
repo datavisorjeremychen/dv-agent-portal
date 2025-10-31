@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --dv-bg: #f8fafc;
+  --dv-text: #0f172a;
+}
+
+html, body, #root { height: 100%; }
+body { background: var(--dv-bg); color: var(--dv-text); }
+
+.dv-card { @apply bg-white border rounded-lg shadow-sm; }
+.dv-card-header { @apply px-4 py-2 border-b text-sm font-medium text-slate-700; }
+.dv-card-body { @apply p-4; }
+
+.btn { @apply inline-flex items-center gap-1 px-3 py-1.5 rounded border text-sm; }
+.btn-primary { @apply bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700; }
+.btn-ghost { @apply bg-white border-slate-200 hover:bg-slate-50; }
+
+.pill { @apply px-2 py-0.5 rounded-full text-xs border; }
+.pill-pub { @apply bg-emerald-50 text-emerald-700 border-emerald-300; }
+.pill-draft { @apply bg-amber-50 text-amber-700 border-amber-300; }
