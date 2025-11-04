@@ -174,6 +174,8 @@ export default function ChatManagement() {
   const [section, setSection] = useState("my"); // my | shared | starred | all
   const [activeProject, setActiveProject] = useState("all");
   const [selectedId, setSelectedId] = useState((loadChats()[0] || {}).id || null);
+  const [showArtifacts, setShowArtifacts] = useState(true);
+
 
   // preview modal content lives in middle panel; but we manage selection here
   const [preview, setPreview] = useState(null); // { chatId, taskId, subId, kind, title, content }
@@ -523,6 +525,76 @@ export default function ChatManagement() {
                 );
               })}
               {filtered.length === 0 && <div className="p-4 text-sm text-slate-500">No chats match filters.</div>}
+              {/* Artifacts List */}
+<div className="mt-4 border-t">
+  <button
+    className="w-full px-3 py-2 flex items-center justify-between text-sm bg-slate-50"
+    onClick={() => setShowArtifacts?.((s) => !s)}
+  >
+    <span className="font-medium">Artifacts</span>
+    {showArtifacts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+  </button>
+
+  {showArtifacts && (
+    <div className="p-2 space-y-2 max-h-[240px] overflow-auto">
+      {filtered.flatMap((c) =>
+        (c.artifacts || []).map((a) => (
+          <div key={a.id} className="border rounded px-2 py-1 text-xs flex items-center gap-2 bg-white">
+            <span className="font-medium text-indigo-700">
+              {a.kind === "rule" ? "Rule" : a.kind === "feature" ? "Feature" : "Contact"}
+            </span>
+            <span className="text-slate-700 truncate flex-1">{a.name}</span>
+            <span className="text-slate-400">{new Date(a.ts).toLocaleDateString()}</span>
+
+            {/* Preview */}
+            <button
+              className="text-indigo-600 hover:underline"
+              onClick={(e) => {
+                e.stopPropagation();
+                const chat = chats.find((cc) => cc.id === c.id);
+                const task = chat.tasks?.find((t) =>
+                  t.sub.some((s) => a.name?.includes(s.id))
+                );
+                const sub = task?.sub?.find((s) => a.name?.includes(s.id));
+                if (task && sub) {
+                  onOpenPreview({
+                    chatId: c.id,
+                    taskId: task.id,
+                    subId: sub.id,
+                    kind: a.kind,
+                    title: a.name,
+                    content: `Recovered artifact: ${a.name}`,
+                    deepLink: a.url || null,
+                  });
+                }
+              }}
+            >
+              Preview
+            </button>
+
+            {/* Platform link if saved */}
+            {a.url && (
+              <a
+                href={a.url}
+                target="_blank"
+                rel="noreferrer"
+                className="text-indigo-600 hover:underline flex items-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <ExternalLink className="w-3 h-3" />
+              </a>
+            )}
+          </div>
+        ))
+      )}
+
+      {filtered.every((c) => (c.artifacts || []).length === 0) && (
+        <div className="text-slate-500 text-xs px-2 py-3">No artifacts created yet.</div>
+      )}
+    </div>
+  )}
+</div>
+
             </div>
           )}
         </section>
