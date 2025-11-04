@@ -227,11 +227,13 @@ export default function ChatManagement() {
             }
 
             // done if all complete & no pending approvals
-            const pendingApproval = task.sub.some((x) => x.approvalNeeded && x.approved == null);
-            if (task.sub.every((x) => x.done) && !pendingApproval) {
-              task.status = "done";
-              copy.finalStatus = "done";
-            }
+           const pendingApproval = task.sub.some(
+  (x) => x.approvalNeeded && x.done && x.approved == null
+);
+if (task.sub.every((x) => x.done) && !pendingApproval) {
+  task.status = 'done';
+  copy.finalStatus = 'done';
+}
           });
           if (JSON.stringify(copy) !== JSON.stringify(c)) {
             copy.updatedAt = new Date().toISOString();
@@ -703,21 +705,25 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
 
   // Handle sub-agent approval
   const setApproval = (taskId, subId, decision) => {
-    const copy = structuredClone(chat);
-    const t = copy.tasks.find((x) => x.id === taskId);
-    const s = t?.sub.find((x) => x.id === subId);
-    if (!s) return;
-    s.approved = decision; // true/false
-    // if approved and has previewId, enable preview button (saving only through Review panel)
-    if (decision === true && s.previewId) {
-      // nothing else here; the Preview button will call onOpenPreview
-    }
-    // if no more approvals pending, resume
-    if (!t.sub.some((x) => x.approvalNeeded && x.approved == null)) {
-      t.status = t.sub.every((x) => x.done) ? "done" : "running";
-    }
-    onUpdate({ tasks: copy.tasks });
-  };
+  const copy = structuredClone(chat);
+  const t = copy.tasks.find((x) => x.id === taskId);
+  const s = t?.sub.find((x) => x.id === subId);
+  if (!s) return;
+  s.approved = decision;
+
+  // Only pause for approvals on sub‑tasks that are done
+  const pending = t.sub.some(
+    (x) => x.approvalNeeded && x.done && x.approved == null
+  );
+
+  // If no completed sub‑tasks need approval, set the status back to running
+  if (!pending) {
+    t.status = t.sub.every((x) => x.done) ? 'done' : 'running';
+  }
+
+  onUpdate({ tasks: copy.tasks });
+};
+
 
  // inside ChatDetail component
 
