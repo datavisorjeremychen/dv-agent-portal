@@ -1,27 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search, Star, StarOff, Share2, FolderPlus, Clock, User2, Filter, CheckCircle2,
-  Circle, Loader2, Play, FileText, FlaskConical, Wand2, ShieldCheck, ExternalLink
+  Circle, Loader2, Play, FileText, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp
 } from "lucide-react";
 
 /**
- * Chat Management System (CMS)
- * - Persistent chat history (localStorage mock DB)
- * - Full-text search & filters (user, agent, date range, status)
- * - Projects/Folders & "Shared with me"
- * - Admin mode: see all users; user mode: own chats only
- * - Conversation detail: transcript + concurrent sub-agents with approvals
- * - Entity Preview buttons & platform deep links after "Save"
- *
- * Fraud Pattern Analysis scenario included as a sample chat with multiple
- * concurrent/serial sub-agents: retrieve FN events, derive pattern, test rules, create artifacts.
+ * Chat Management System (CMS) — v2
+ * - Left-most panel (collapsible): Platform tabs + expandable search/filters (visible when Chats is active)
+ * - Chat history panel (collapsible) with more seeded chats
+ * - Middle "Review" panel: Preview window; ONLY place where "Save" exists
+ * - Right panel: Chat transcript + agent orchestration
+ * - Sub-agent approval types:
+ *   - "approve": Approve / Reject (e.g., data retrieval confirmation)
+ *   - "accept": Accept / Decline (e.g., adopt proposed pattern/rule/feature)
+ * - Persistence via localStorage (swap for API later)
  */
 
-const DB_KEY = "dv.cms.chats.v1";
+const DB_KEY = "dv.cms.chats.v2";
 const DB_PROJ = "dv.cms.projects.v1";
-const CURRENT_USER = "jeremy.chen@datavisor.com"; // mock current user
+const CURRENT_USER = "jeremy.chen@datavisor.com";
 
-// --- seed data (one fraud-pattern analysis chat) ---
+/* -------------------------- Seed data -------------------------- */
 function seedChats() {
   const now = new Date().toISOString();
   return [
@@ -39,26 +38,24 @@ function seedChats() {
         { who: "user", text: "Evaluate recent uncaught ATO cases and propose new rules.", ts: now },
         { who: "bot", text: "Starting FN retrieval and analysis pipeline…", ts: now },
       ],
+      default_model: "gpt-5o",
+      artifacts: [],
+      finalStatus: "in-progress",
       tasks: [
         {
           id: "t1",
           label: "Fraud Pattern Analysis",
-          status: "running", // running | awaiting-approval | done
-          // sub-agents may run serially or concurrently
+          status: "running",
           sub: [
-            { id: "s1", name: "Fetch FN Events (last 14d)", concurrent: true, pct: 0, done: false, approvalNeeded: false },
+            { id: "s1", name: "Fetch FN Events (last 14d)", concurrent: true, pct: 0, done: false, approvalNeeded: true, approvalType: "approve", approved: null },
             { id: "s2", name: "Derive Fraud Pattern (embedding + clustering)", concurrent: true, pct: 0, done: false, approvalNeeded: false },
-            { id: "s3", name: "Hypothesis Rules (draft)", concurrent: false, pct: 0, done: false, approvalNeeded: true, approved: null, previewUrl: null, savedUrl: null },
+            { id: "s3", name: "Draft Hypothesis Rules", concurrent: false, pct: 0, done: false, approvalNeeded: true, approvalType: "accept", approved: null, previewId: "preview_rules_s3" },
             { id: "s4", name: "Backtest Rules", concurrent: false, pct: 0, done: false, approvalNeeded: false, result: { lift: "+42%", precision: "0.71", recall: "0.63" } },
-            { id: "s5", name: "Generate Features (if threshold met)", concurrent: false, pct: 0, done: false, approvalNeeded: true, approved: null, previewUrl: null, savedUrl: null },
-            { id: "s6", name: "Create Rules (if threshold met)", concurrent: false, pct: 0, done: false, approvalNeeded: true, approved: null, previewUrl: null, savedUrl: null },
+            { id: "s5", name: "Generate Features (if threshold met)", concurrent: false, pct: 0, done: false, approvalNeeded: true, approvalType: "accept", approved: null, previewId: "preview_feats_s5" },
+            { id: "s6", name: "Create Rules (if threshold met)", concurrent: false, pct: 0, done: false, approvalNeeded: true, approvalType: "accept", approved: null, previewId: "preview_rules_s6" },
           ],
-          approvalsOpen: true,
         },
       ],
-      default_model: "gpt-5o",
-      artifacts: [], // links we add when entities are saved
-      finalStatus: "in-progress",
     },
     {
       id: "c2",
@@ -74,14 +71,72 @@ function seedChats() {
         { who: "user", text: "Summarize main risk signals for entity 6972…", ts: now },
         { who: "bot", text: "Password+2FA change minutes before alert; Socure R217/R572/R633; iOS login 73.136.129.131", ts: now },
       ],
-      tasks: [],
       default_model: "gpt-5o-mini",
       artifacts: [],
       finalStatus: "done",
+      tasks: [],
+    },
+    {
+      id: "c3",
+      title: "Elder Abuse Pattern Review — BillPay anomalies",
+      createdAt: now,
+      updatedAt: now,
+      userId: CURRENT_USER,
+      isStarred: false,
+      isShared: false,
+      project: "Alert Review Automation Q&A",
+      agents: ["Unauthorized Transaction Review Decision Agent"],
+      transcript: [
+        { who: "user", text: "Check last 30d payments for large anomalies for elderly cohort.", ts: now },
+        { who: "bot", text: "Retrieved cohort baseline. Two anomalies found. Proposing inquiries.", ts: now },
+      ],
+      default_model: "gpt-5o",
+      artifacts: [],
+      finalStatus: "in-progress",
+      tasks: [
+        {
+          id: "t2",
+          label: "Elder Abuse Anomaly Workflow",
+          status: "awaiting-approval",
+          sub: [
+            { id: "s1", name: "Retrieve Customer Data (HIPAA-safe)", concurrent: true, pct: 100, done: true, approvalNeeded: true, approvalType: "approve", approved: null },
+            { id: "s2", name: "Propose Contact to Trusted Person", concurrent: false, pct: 0, done: false, approvalNeeded: true, approvalType: "accept", approved: null, previewId: "preview_contact_s2" },
+          ],
+        },
+      ],
+    },
+    {
+      id: "c4",
+      title: "Velocity Feature Tuning — Backtest variants",
+      createdAt: now,
+      updatedAt: now,
+      userId: "fraud.ops@datavisor.com",
+      isStarred: true,
+      isShared: true,
+      project: "Q3 Velocity Feature Development",
+      agents: ["FeaturePlatformAgent", "RulesEngineAgent"],
+      transcript: [
+        { who: "user", text: "Try 3 velocity bins for account_age < 30d and test against FN.", ts: now },
+        { who: "bot", text: "Built 3 variants. Running A/B/C backtest.", ts: now },
+      ],
+      default_model: "gpt-5o",
+      artifacts: [],
+      finalStatus: "in-progress",
+      tasks: [
+        {
+          id: "t3",
+          label: "Velocity Tuning",
+          status: "running",
+          sub: [
+            { id: "s1", name: "Assemble cohorts", concurrent: true, pct: 30, done: false, approvalNeeded: false },
+            { id: "s2", name: "Compute deltas", concurrent: true, pct: 20, done: false, approvalNeeded: false },
+            { id: "s3", name: "Select winning variant", concurrent: false, pct: 0, done: false, approvalNeeded: true, approvalType: "accept", approved: null, previewId: "preview_variant_s3" },
+          ],
+        },
+      ],
     },
   ];
 }
-
 function loadChats() {
   try {
     const raw = localStorage.getItem(DB_KEY);
@@ -93,7 +148,6 @@ function loadChats() {
 function saveChats(list) {
   localStorage.setItem(DB_KEY, JSON.stringify(list));
 }
-
 function loadProjects() {
   try {
     const raw = localStorage.getItem(DB_PROJ);
@@ -109,64 +163,72 @@ function saveProjects(list) {
 /* ============================= Page ============================= */
 
 export default function ChatManagement() {
-  const [adminMode, setAdminMode] = useState(true); // admin can see all users
+  const [adminMode, setAdminMode] = useState(true);
+  const [leftOpen, setLeftOpen] = useState(true);
+  const [historyOpen, setHistoryOpen] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(true); // filters under Chats tab
   const [chats, setChats] = useState(loadChats);
   const [projects, setProjects] = useState(loadProjects);
   const [query, setQuery] = useState("");
   const [filters, setFilters] = useState({ userId: "", agent: "", dateFrom: "", dateTo: "", resultStatus: "" });
   const [section, setSection] = useState("my"); // my | shared | starred | all
   const [activeProject, setActiveProject] = useState("all");
-  const [selectedId, setSelectedId] = useState(chats[0]?.id || null);
+  const [selectedId, setSelectedId] = useState((loadChats()[0] || {}).id || null);
 
-  // simulate sub-agent progress for running tasks
+  // preview modal content lives in middle panel; but we manage selection here
+  const [preview, setPreview] = useState(null); // { chatId, taskId, subId, kind, title, content }
+
+  // background progress for running tasks
   useEffect(() => {
-    const interval = setInterval(() => {
+    const intv = setInterval(() => {
       setChats((prev) => {
         let changed = false;
         const list = prev.map((c) => {
           const copy = structuredClone(c);
           copy.tasks?.forEach((task) => {
-            if (task.status !== "running") return;
+            if (task.status === "done") return;
+
+            // progress concurrent subs anytime status is running
             task.sub.forEach((s) => {
-              // concurrent subs (s1, s2) progress together
+              if (task.status !== "running") return;
               if (s.done) return;
-              const step = Math.random() < 0.7 ? 8 + Math.random() * 12 : 0; // jitter
-              s.pct = Math.min(100, s.pct + step);
-              if (s.pct >= 100) {
-                s.pct = 100;
-                s.done = true;
-                // move to next serial sub-step only when previous is done
+              const step = s.concurrent ? 10 + Math.random() * 12 : 0;
+              if (step > 0) {
+                s.pct = Math.min(100, s.pct + step);
+                if (s.pct >= 100) {
+                  s.pct = 100;
+                  s.done = true;
+                  if (s.approvalNeeded && s.approved == null) task.status = "awaiting-approval";
+                }
               }
             });
 
-            // if s1 & s2 done, start s3; then s4; then s5; then s6
-            const idx3 = task.sub.findIndex((x) => x.id === "s3");
-            const s1Done = task.sub.find((x) => x.id === "s1")?.done;
-            const s2Done = task.sub.find((x) => x.id === "s2")?.done;
-            if (s1Done && s2Done) {
-              // ensure serial steps progress sequentially
-              for (let i = idx3; i < task.sub.length; i++) {
+            // chain serial subs after concurrent ones complete
+            const firstSerialIdx = task.sub.findIndex((x) => !x.concurrent);
+            if (firstSerialIdx >= 0) {
+              for (let i = firstSerialIdx; i < task.sub.length; i++) {
                 const s = task.sub[i];
-                const prevDone = i === idx3 ? true : task.sub[i - 1].done;
+                const prevDone = i === firstSerialIdx ? task.sub.slice(0, firstSerialIdx).every(x => x.done) : task.sub[i - 1].done;
                 if (!prevDone) break;
-                if (!s.done) {
+                if (!s.done && task.status === "running") {
                   s.pct = Math.min(100, s.pct + (6 + Math.random() * 10));
                   if (s.pct >= 100) {
                     s.pct = 100;
                     s.done = true;
-                    // when a draft entity is done and needs approval, open approvals
                     if (s.approvalNeeded && s.approved == null) {
                       task.status = "awaiting-approval";
                     }
                   }
-                  break; // only one active serial step at a time
+                  break; // only one serial step increments at a time
                 }
               }
             }
 
-            // if all sub done and approvals handled, mark task done
-            if (task.sub.every((x) => x.done) && !task.sub.some((x) => x.approvalNeeded && x.approved == null)) {
+            // done if all complete & no pending approvals
+            const pendingApproval = task.sub.some((x) => x.approvalNeeded && x.approved == null);
+            if (task.sub.every((x) => x.done) && !pendingApproval) {
               task.status = "done";
+              copy.finalStatus = "done";
             }
           });
           if (JSON.stringify(copy) !== JSON.stringify(c)) {
@@ -178,8 +240,8 @@ export default function ChatManagement() {
         if (changed) saveChats(list);
         return list;
       });
-    }, 650);
-    return () => clearInterval(interval);
+    }, 700);
+    return () => clearInterval(intv);
   }, []);
 
   const allAgents = useMemo(() => [...new Set(chats.flatMap((c) => c.agents || []))], [chats]);
@@ -189,15 +251,14 @@ export default function ChatManagement() {
     const q = query.trim().toLowerCase();
     const from = filters.dateFrom ? new Date(filters.dateFrom) : null;
     const to = filters.dateTo ? new Date(filters.dateTo) : null;
-
     return chats
       .filter((c) => {
         if (!adminMode && c.userId !== CURRENT_USER) return false;
         if (section === "my" && c.userId !== CURRENT_USER) return false;
         if (section === "shared" && !c.isShared) return false;
         if (section === "starred" && !c.isStarred) return false;
+        if (section === "all" && !adminMode) return false;
         if (activeProject !== "all" && c.project !== activeProject) return false;
-
         if (filters.userId && c.userId !== filters.userId) return false;
         if (filters.agent && !(c.agents || []).includes(filters.agent)) return false;
         if (filters.resultStatus) {
@@ -206,7 +267,6 @@ export default function ChatManagement() {
         }
         if (from && new Date(c.updatedAt) < from) return false;
         if (to && new Date(c.updatedAt) > to) return false;
-
         if (!q) return true;
         const hay = [
           c.title,
@@ -214,9 +274,7 @@ export default function ChatManagement() {
           ...(c.transcript || []).map((t) => t.text),
           ...(c.agents || []),
           ...(c.artifacts || []).map((a) => a.name),
-        ]
-          .join(" ")
-          .toLowerCase();
+        ].join(" ").toLowerCase();
         return hay.includes(q);
       })
       .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -243,6 +301,8 @@ export default function ChatManagement() {
     saveProjects(list);
   };
 
+  /* ---------------------------- Layout ---------------------------- */
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
       {/* Header */}
@@ -264,174 +324,266 @@ export default function ChatManagement() {
         </div>
       </header>
 
-      {/* Body 3-col */}
-      <div className="flex-1 grid grid-cols-[260px_minmax(360px,1fr)_minmax(420px,1.2fr)]">
-        {/* Left: filters/projects/sections */}
-        <aside className="border-r bg-white p-3 space-y-3">
-          <div className="text-xs font-medium text-slate-500">Search</div>
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-2 top-2.5 text-slate-400" />
-            <input
-              className="w-full border rounded pl-8 pr-2 py-1.5 text-sm"
-              placeholder="Find chats, agents, artifacts…"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+      {/* Body: 4 logical areas (left rail, history, review, detail). Left & history are collapsible */}
+      <div className="flex-1 grid grid-cols-[auto_auto_minmax(420px,1fr)_minmax(420px,1.1fr)]">
+        {/* Left Rail: Platform tabs + expandable filters (visible in Chats) */}
+        <aside className={`${leftOpen ? "w-64" : "w-8"} transition-all border-r bg-white overflow-hidden`}>
+          <div className="h-10 border-b flex items-center justify-between px-2 text-sm">
+            <span className="font-medium">{leftOpen ? "Platform" : ""}</span>
+            <button className="text-slate-500" onClick={() => setLeftOpen((s) => !s)}>
+              {leftOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
           </div>
 
-          <div className="text-xs font-medium text-slate-500 mt-4 flex items-center justify-between">
-            <span>Filters</span>
-            <Filter className="w-4 h-4 text-slate-400" />
-          </div>
-          <div className="space-y-2">
-            <select
-              className="w-full border rounded px-2 py-1.5 text-sm"
-              value={filters.userId}
-              onChange={(e) => setFilters((f) => ({ ...f, userId: e.target.value }))}
-            >
-              <option value="">User (any)</option>
-              {allUsers.map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
-              ))}
-            </select>
-            <select
-              className="w-full border rounded px-2 py-1.5 text-sm"
-              value={filters.agent}
-              onChange={(e) => setFilters((f) => ({ ...f, agent: e.target.value }))}
-            >
-              <option value="">Agent (any)</option>
-              {allAgents.map((a) => (
-                <option key={a} value={a}>
-                  {a}
-                </option>
-              ))}
-            </select>
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="date"
-                className="border rounded px-2 py-1.5 text-sm"
-                value={filters.dateFrom}
-                onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
-              />
-              <input
-                type="date"
-                className="border rounded px-2 py-1.5 text-sm"
-                value={filters.dateTo}
-                onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
-              />
+          {leftOpen && (
+            <div className="p-2 space-y-2">
+              {/* 4 tabs (static labels for demo) */}
+              <div className="space-y-1">
+                <div className="px-2 py-1.5 rounded border bg-white text-sm">Insights Center</div>
+                <div className="px-2 py-1.5 rounded border bg-white text-sm">Data Studio</div>
+                <div className="px-2 py-1.5 rounded border bg-white text-sm">Feature Platform</div>
+                <div className="px-2 py-1.5 rounded border bg-white text-sm">Rules Engine</div>
+                <div className="px-2 py-1.5 rounded border bg-indigo-600 text-white text-sm">Chats</div>
+              </div>
+
+              {/* Expandable Search & Filters for Chats */}
+              <div className="mt-2 border rounded">
+                <button
+                  className="w-full px-2 py-1.5 flex items-center justify-between text-sm border-b bg-slate-50"
+                  onClick={() => setFiltersOpen((s) => !s)}
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Filter className="w-4 h-4" /> Search & Filters
+                  </span>
+                  {filtersOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                </button>
+
+                {filtersOpen && (
+                  <div className="p-2 space-y-2">
+                    <div className="relative">
+                      <Search className="w-4 h-4 absolute left-2 top-2.5 text-slate-400" />
+                      <input
+                        className="w-full border rounded pl-8 pr-2 py-1.5 text-sm"
+                        placeholder="Find chats, agents, artifacts…"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                      />
+                    </div>
+
+                    <select
+                      className="w-full border rounded px-2 py-1.5 text-sm"
+                      value={filters.userId}
+                      onChange={(e) => setFilters((f) => ({ ...f, userId: e.target.value }))}
+                    >
+                      <option value="">User (any)</option>
+                      {[...new Set(chats.map((c) => c.userId))].map((u) => (
+                        <option key={u} value={u}>{u}</option>
+                      ))}
+                    </select>
+
+                    <select
+                      className="w-full border rounded px-2 py-1.5 text-sm"
+                      value={filters.agent}
+                      onChange={(e) => setFilters((f) => ({ ...f, agent: e.target.value }))}
+                    >
+                      <option value="">Agent (any)</option>
+                      {[...new Set(chats.flatMap((c) => c.agents || []))].map((a) => (
+                        <option key={a} value={a}>{a}</option>
+                      ))}
+                    </select>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="date"
+                        className="border rounded px-2 py-1.5 text-sm"
+                        value={filters.dateFrom}
+                        onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
+                      />
+                      <input
+                        type="date"
+                        className="border rounded px-2 py-1.5 text-sm"
+                        value={filters.dateTo}
+                        onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
+                      />
+                    </div>
+
+                    <select
+                      className="w-full border rounded px-2 py-1.5 text-sm"
+                      value={filters.resultStatus}
+                      onChange={(e) => setFilters((f) => ({ ...f, resultStatus: e.target.value }))}
+                    >
+                      <option value="">Status (any)</option>
+                      <option>In Progress</option>
+                      <option>Done</option>
+                    </select>
+
+                    <div className="pt-2 border-t">
+                      <div className="text-xs font-medium text-slate-500 mb-1">Projects</div>
+                      <button
+                        className={`w-full text-left px-2 py-1.5 rounded text-sm border ${activeProject === "all" ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
+                        onClick={() => setActiveProject("all")}
+                      >
+                        All
+                      </button>
+                      {loadProjects().map((p) => (
+                        <button
+                          key={p}
+                          className={`mt-1 w-full text-left px-2 py-1.5 rounded text-sm border ${activeProject === p ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
+                          onClick={() => setActiveProject(p)}
+                        >
+                          {p}
+                        </button>
+                      ))}
+                      <button className="mt-2 w-full text-left text-xs text-indigo-600" onClick={() => {
+                        const name = prompt("New project/folder name");
+                        if (!name) return;
+                        const list = [...new Set([...projects, name])];
+                        setProjects(list);
+                        saveProjects(list);
+                      }}>
+                        <FolderPlus className="w-4 h-4 inline mr-1" /> Add Project
+                      </button>
+                    </div>
+
+                    <div className="pt-2 border-t">
+                      <div className="text-xs font-medium text-slate-500 mb-1">Sections</div>
+                      {["my","shared","starred"].map(sec => (
+                        <button
+                          key={sec}
+                          className={`mr-1 mb-1 inline-flex items-center px-2 py-1 rounded text-xs border ${section === sec ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
+                          onClick={() => setSection(sec)}
+                        >
+                          {sec === "my" ? "My Chats" : sec === "shared" ? "Shared with Me" : "Starred"}
+                        </button>
+                      ))}
+                      {adminMode && (
+                        <button
+                          className={`inline-flex items-center px-2 py-1 rounded text-xs border ${section === "all" ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
+                          onClick={() => setSection("all")}
+                        >
+                          All (Admin)
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
-            <select
-              className="w-full border rounded px-2 py-1.5 text-sm"
-              value={filters.resultStatus}
-              onChange={(e) => setFilters((f) => ({ ...f, resultStatus: e.target.value }))}
-            >
-              <option value="">Status (any)</option>
-              <option>In Progress</option>
-              <option>Done</option>
-            </select>
-          </div>
-
-          <div className="text-xs font-medium text-slate-500 mt-4 flex items-center justify-between">
-            <span>Projects</span>
-            <button className="text-xs text-indigo-600 inline-flex items-center gap-1" onClick={addProject}>
-              <FolderPlus className="w-4 h-4" /> Add
-            </button>
-          </div>
-          <div className="space-y-1">
-            <button
-              className={`w-full text-left px-2 py-1.5 rounded text-sm border ${activeProject === "all" ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
-              onClick={() => setActiveProject("all")}
-            >
-              All
-            </button>
-            {projects.map((p) => (
-              <button
-                key={p}
-                className={`w-full text-left px-2 py-1.5 rounded text-sm border ${activeProject === p ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
-                onClick={() => setActiveProject(p)}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-
-          <div className="text-xs font-medium text-slate-500 mt-4">Sections</div>
-          <div className="space-y-1">
-            <button
-              className={`w-full text-left px-2 py-1.5 rounded text-sm border ${section === "my" ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
-              onClick={() => setSection("my")}
-            >
-              My Chats
-            </button>
-            <button
-              className={`w-full text-left px-2 py-1.5 rounded text-sm border ${section === "shared" ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
-              onClick={() => setSection("shared")}
-            >
-              Shared with Me
-            </button>
-            <button
-              className={`w-full text-left px-2 py-1.5 rounded text-sm border ${section === "starred" ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
-              onClick={() => setSection("starred")}
-            >
-              Starred
-            </button>
-            {adminMode && (
-              <button
-                className={`w-full text-left px-2 py-1.5 rounded text-sm border ${section === "all" ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
-                onClick={() => setSection("all")}
-              >
-                All (Admin)
-              </button>
-            )}
-          </div>
+          )}
         </aside>
 
-        {/* Middle: chat list */}
-        <section className="border-r bg-white overflow-auto">
-          <div className="px-3 py-2 border-b text-sm text-slate-600 flex items-center justify-between">
-            <span>Chats ({filtered.length})</span>
-            <span className="inline-flex items-center gap-1 text-xs text-slate-500"><Clock className="w-3 h-3" /> Updated</span>
+        {/* Chat History (collapsible) */}
+        <section className={`${historyOpen ? "w-[360px]" : "w-8"} transition-all border-r bg-white overflow-hidden`}>
+          <div className="h-10 border-b flex items-center justify-between px-2 text-sm">
+            <span className="font-medium">{historyOpen ? `Chats (${filtered.length})` : ""}</span>
+            <button className="text-slate-500" onClick={() => setHistoryOpen((s) => !s)}>
+              {historyOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+            </button>
           </div>
 
-          <div>
-            {filtered.map((c) => {
-              const active = c.id === selectedId;
-              return (
-                <button
-                  key={c.id}
-                  onClick={() => setSelectedId(c.id)}
-                  className={`w-full text-left px-3 py-2 border-b hover:bg-slate-50 ${active ? "bg-indigo-50" : "bg-white"}`}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="font-medium text-slate-800 text-sm line-clamp-1">{c.title}</div>
-                    <div className="text-xs text-slate-500">{new Date(c.updatedAt).toLocaleString()}</div>
-                  </div>
-                  <div className="text-xs text-slate-500 mt-0.5 line-clamp-2">
-                    {(c.transcript?.[c.transcript.length - 1]?.text || "").slice(0, 140)}
-                  </div>
-                  <div className="mt-1 flex items-center gap-2">
-                    <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 border text-slate-700">{c.userId}</span>
-                    {(c.agents || []).slice(0, 3).map((a) => (
-                      <span key={a} className="text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700">{a}</span>
-                    ))}
-                  </div>
-                </button>
-              );
-            })}
-            {filtered.length === 0 && <div className="p-4 text-sm text-slate-500">No chats match filters.</div>}
-          </div>
+          {historyOpen && (
+            <div>
+              <div className="px-3 py-2 text-xs text-slate-500 flex items-center gap-1">
+                <Clock className="w-3 h-3" /> Updated
+              </div>
+              {filtered.map((c) => {
+                const active = c.id === selectedId;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => setSelectedId(c.id)}
+                    className={`w-full text-left px-3 py-2 border-b hover:bg-slate-50 ${active ? "bg-indigo-50" : "bg-white"}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium text-slate-800 text-sm line-clamp-1">{c.title}</div>
+                      <div className="text-xs text-slate-500">{new Date(c.updatedAt).toLocaleString()}</div>
+                    </div>
+                    <div className="text-xs text-slate-500 mt-0.5 line-clamp-2">
+                      {(c.transcript?.[c.transcript.length - 1]?.text || "").slice(0, 140)}
+                    </div>
+                    <div className="mt-1 flex items-center gap-2">
+                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 border text-slate-700">{c.userId}</span>
+                      {(c.agents || []).slice(0, 3).map((a) => (
+                        <span key={a} className="text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700">{a}</span>
+                      ))}
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleShare(c); }}
+                        className="ml-auto text-xs text-slate-500 hover:text-indigo-600 inline-flex items-center gap-1"
+                      >
+                        <Share2 className="w-3 h-3" /> {c.isShared ? "Unshare" : "Share"}
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleStar(c); }}
+                        className="text-xs text-slate-500 hover:text-amber-600 inline-flex items-center gap-1"
+                      >
+                        {c.isStarred ? <Star className="w-3 h-3 text-amber-500" /> : <StarOff className="w-3 h-3" />} Star
+                      </button>
+                    </div>
+                  </button>
+                );
+              })}
+              {filtered.length === 0 && <div className="p-4 text-sm text-slate-500">No chats match filters.</div>}
+            </div>
+          )}
         </section>
 
-        {/* Right: chat detail */}
+        {/* Middle: Review / Preview window (only place with Save) */}
+        <section className="bg-white border-r flex flex-col">
+          <div className="h-10 border-b px-3 flex items-center justify-between">
+            <div className="font-medium text-sm">Review / Preview</div>
+            {preview && (
+              <a href={preview.deepLink} className="text-xs text-indigo-600 inline-flex items-center gap-1" target="_blank" rel="noreferrer">
+                <ExternalLink className="w-4 h-4" /> View in Platform
+              </a>
+            )}
+          </div>
+
+          {preview ? (
+            <div className="p-3 space-y-3">
+              <div className="text-sm text-slate-500">Previewing: <span className="font-medium text-slate-700">{preview.title}</span></div>
+              <div className="border rounded p-3 bg-slate-50 text-sm min-h-[200px]">
+                {/* mock preview content */}
+                <pre className="whitespace-pre-wrap text-slate-800">{preview.content}</pre>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => {
+                    // create a fake platform URL and persist artifact into chat
+                    const kind = preview.kind; // "rule" | "feature" | "contact"
+                    const id = `${kind}-${Math.random().toString(36).slice(2, 8)}`;
+                    const url = kind === "feature" ? `#/feature/${id}` : kind === "contact" ? `#/contact/${id}` : `#/rule/${id}`;
+                    const copy = structuredClone(chats);
+                    const chatIdx = copy.findIndex((c) => c.id === preview.chatId);
+                    if (chatIdx >= 0) {
+                      copy[chatIdx].artifacts = [
+                        ...(copy[chatIdx].artifacts || []),
+                        { id, kind, name: `${kind.toUpperCase()} ${id}`, url, ts: new Date().toISOString() },
+                      ];
+                      saveChats(copy);
+                      setChats(copy);
+                    }
+                    alert(`Saved to platform as ${kind.toUpperCase()} ${id}`);
+                    setPreview({ ...preview, deepLink: url }); // show link
+                  }}
+                >
+                  Save
+                </button>
+                <button className="btn btn-ghost" onClick={() => setPreview(null)}>Close</button>
+              </div>
+            </div>
+          ) : (
+            <div className="m-auto text-slate-500 text-sm">Select a sub-agent result to preview (from the right panel).</div>
+          )}
+        </section>
+
+        {/* Right: Chat Detail + Orchestration */}
         <section className="bg-white flex flex-col">
           {selected ? (
             <ChatDetail
               chat={selected}
               onUpdate={(patch) => updateChat(selected.id, patch)}
-              onToggleStar={() => toggleStar(selected)}
-              onToggleShare={() => toggleShare(selected)}
+              onOpenPreview={setPreview}
             />
           ) : (
             <div className="m-auto text-slate-500">Select a chat to view details</div>
@@ -444,7 +596,7 @@ export default function ChatManagement() {
 
 /* ========================= Chat Detail ========================= */
 
-function ChatDetail({ chat, onUpdate, onToggleStar, onToggleShare }) {
+function ChatDetail({ chat, onUpdate, onOpenPreview }) {
   const [input, setInput] = useState("");
   const scroller = useRef(null);
 
@@ -460,65 +612,56 @@ function ChatDetail({ chat, onUpdate, onToggleStar, onToggleShare }) {
     onUpdate({ transcript, updatedAt: ts });
     setInput("");
 
-    // echo bot (mock)
     setTimeout(() => {
       const transcript2 = [...transcript, { who: "bot", text: "Acknowledged. Sub-agents queued as needed.", ts: new Date().toISOString() }];
       onUpdate({ transcript: transcript2 });
     }, 500);
   };
 
-  // Approve individual sub-agent output
-  const approveOne = (taskId, subId, approve) => {
+  // Handle sub-agent approval
+  const setApproval = (taskId, subId, decision) => {
     const copy = structuredClone(chat);
     const t = copy.tasks.find((x) => x.id === taskId);
-    if (!t) return;
-    const s = t.sub.find((x) => x.id === subId);
+    const s = t?.sub.find((x) => x.id === subId);
     if (!s) return;
-    s.approved = approve;
-    // if approved AND it's an entity creation step, enable preview, then allow save
-    if (approve && (s.name.startsWith("Generate Features") || s.name.startsWith("Create Rules"))) {
-      s.previewUrl = `#/preview/${subId}`;
+    s.approved = decision; // true/false
+    // if approved and has previewId, enable preview button (saving only through Review panel)
+    if (decision === true && s.previewId) {
+      // nothing else here; the Preview button will call onOpenPreview
     }
-    // if no more pending approvals, resume task
+    // if no more approvals pending, resume
     if (!t.sub.some((x) => x.approvalNeeded && x.approved == null)) {
       t.status = t.sub.every((x) => x.done) ? "done" : "running";
     }
     onUpdate({ tasks: copy.tasks });
   };
 
-  const approveAll = () => {
-    const copy = structuredClone(chat);
-    copy.tasks.forEach((t) => {
-      t.sub.forEach((s) => {
-        if (s.approvalNeeded && s.approved == null) {
-          s.approved = true;
-          s.previewUrl = s.previewUrl || `#/preview/${s.id}`;
-        }
-      });
-      t.status = t.sub.every((x) => x.done) ? "done" : "running";
+  const openPreview = (taskId, sub) => {
+    const kind =
+      sub.name.startsWith("Generate Features") ? "feature" :
+      sub.name.startsWith("Create Rules") ? "rule" :
+      sub.name.toLowerCase().includes("contact") ? "contact" : "rule";
+    onOpenPreview({
+      chatId: chat.id,
+      taskId,
+      subId: sub.id,
+      kind,
+      title: sub.name,
+      content:
+`// Preview — ${sub.name}
+{
+  "pattern": "ATO credential compromise",
+  "signals": ["recent 2FA change", "password change", "Socure R217/R572/R633", "iOS login 73.136.129.131"],
+  "hypothesis": "Increase scrutiny on BillPay > $500 within 24h of security changes",
+  "proposed_rules": ["rule_${sub.id}_1", "rule_${sub.id}_2"]
+}`,
+      deepLink: null,
     });
-    onUpdate({ tasks: copy.tasks });
-  };
-
-  const saveEntity = (taskId, subId, kind) => {
-    const copy = structuredClone(chat);
-    const t = copy.tasks.find((x) => x.id === taskId);
-    const s = t?.sub.find((x) => x.id === subId);
-    if (!s) return;
-    const id = `${kind}-${Math.random().toString(36).slice(2, 8)}`;
-    // simulate platform URL
-    const savedUrl = kind === "feature" ? `#/feature/${id}` : `#/rule/${id}`;
-    s.savedUrl = savedUrl;
-    copy.artifacts = [
-      ...(copy.artifacts || []),
-      { id, kind, name: `${kind.toUpperCase()} ${id}`, url: savedUrl, ts: new Date().toISOString() },
-    ];
-    onUpdate({ tasks: copy.tasks, artifacts: copy.artifacts });
   };
 
   return (
     <>
-      {/* Title bar */}
+      {/* Conversation header */}
       <div className="px-3 py-2 border-b flex items-center justify-between">
         <div>
           <div className="font-semibold text-slate-800">{chat.title}</div>
@@ -526,18 +669,9 @@ function ChatDetail({ chat, onUpdate, onToggleStar, onToggleShare }) {
             {chat.userId} • Updated {new Date(chat.updatedAt).toLocaleString()} • Model: {chat.default_model}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button className="btn btn-ghost text-xs" onClick={onToggleShare}>
-            <Share2 className="w-4 h-4" /> {chat.isShared ? "Unshare" : "Share"}
-          </button>
-          <button className="btn btn-ghost text-xs" onClick={onToggleStar}>
-            {chat.isStarred ? <Star className="w-4 h-4 text-amber-500" /> : <StarOff className="w-4 h-4" />}
-            {chat.isStarred ? " Starred" : " Star"}
-          </button>
-        </div>
       </div>
 
-      {/* Agent run status + approvals */}
+      {/* Orchestration + approvals */}
       <div className="px-3 py-2 border-b bg-slate-50">
         <div className="text-xs text-slate-600 mb-2">Agent Orchestration</div>
         <div className="space-y-3">
@@ -547,10 +681,16 @@ function ChatDetail({ chat, onUpdate, onToggleStar, onToggleShare }) {
                 <div className="text-sm font-medium">{t.label}</div>
                 <div className="text-xs">
                   {t.status === "running" && (
-                    <span className="inline-flex items-center gap-1 text-slate-600"><Loader2 className="w-3 h-3 animate-spin" /> Running</span>
+                    <span className="inline-flex items-center gap-1 text-slate-600">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Running
+                    </span>
                   )}
                   {t.status === "awaiting-approval" && <span className="text-amber-700">Awaiting Approval</span>}
-                  {t.status === "done" && <span className="text-emerald-700 inline-flex items-center gap-1"><CheckCircle2 className="w-3 h-3" /> Done</span>}
+                  {t.status === "done" && (
+                    <span className="text-emerald-700 inline-flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3" /> Done
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -568,41 +708,38 @@ function ChatDetail({ chat, onUpdate, onToggleStar, onToggleShare }) {
                       <div className={`h-1.5 rounded ${s.done ? "bg-emerald-600" : "bg-indigo-600"}`} style={{ width: `${s.pct}%` }} />
                     </div>
 
-                    {/* Approval panel if needed */}
+                    {/* Approval actions */}
                     {s.approvalNeeded && s.done && (
-                      <div className="mt-2 p-2 bg-amber-50 border rounded text-xs">
-                        <div className="font-medium text-amber-800 mb-1">Approval required</div>
+                      <div className="mt-2 p-2 bg-slate-50 border rounded text-xs">
+                        <div className="font-medium text-slate-700 mb-1">
+                          {s.approvalType === "approve" ? "Approval required" : "Accept required"}
+                        </div>
                         <div className="flex items-center gap-2">
-                          <button className={`btn ${s.approved === true ? "btn-primary" : "btn-ghost"}`} onClick={() => approveOne(t.id, s.id, true)}>
-                            Approve
-                          </button>
-                          <button className={`btn ${s.approved === false ? "btn-primary" : "btn-ghost"}`} onClick={() => approveOne(t.id, s.id, false)}>
-                            Reject
-                          </button>
-                          {/* Preview and Save */}
-                          {s.approved === true && (
+                          {s.approvalType === "approve" ? (
                             <>
-                              <button className="btn btn-ghost inline-flex items-center gap-1" onClick={() => window.alert("Open Preview window")}>
-                                <FileText className="w-4 h-4" /> Preview
+                              <button className={`btn ${s.approved === true ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, true)}>
+                                Approve
                               </button>
-                              <button
-                                className="btn btn-primary inline-flex items-center gap-1"
-                                onClick={() =>
-                                  saveEntity(t.id, s.id, s.name.startsWith("Generate Features") ? "feature" : "rule")
-                                }
-                              >
-                                <ShieldCheck className="w-4 h-4" /> Save
+                              <button className={`btn ${s.approved === false ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, false)}>
+                                Reject
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button className={`btn ${s.approved === true ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, true)}>
+                                Accept
+                              </button>
+                              <button className={`btn ${s.approved === false ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, false)}>
+                                Decline
                               </button>
                             </>
                           )}
-                          {s.savedUrl && (
-                            <a
-                              href={s.savedUrl}
-                              className="text-indigo-600 inline-flex items-center gap-1 ml-auto"
-                              title="Open in DataVisor platform"
-                            >
-                              <ExternalLink className="w-4 h-4" /> View in Platform
-                            </a>
+
+                          {/* Preview only (Save happens in the middle Review panel) */}
+                          {s.approved === true && s.previewId && (
+                            <button className="btn btn-ghost inline-flex items-center gap-1" onClick={() => openPreview(t.id, s)}>
+                              <FileText className="w-4 h-4" /> Preview
+                            </button>
                           )}
                         </div>
                       </div>
@@ -610,15 +747,6 @@ function ChatDetail({ chat, onUpdate, onToggleStar, onToggleShare }) {
                   </div>
                 ))}
               </div>
-
-              {/* Approve all (if any pending) */}
-              {t.sub.some((x) => x.approvalNeeded && x.approved == null) && (
-                <div className="mt-2 flex justify-end">
-                  <button className="btn btn-primary inline-flex items-center gap-1" onClick={approveAll}>
-                    <CheckCircle2 className="w-4 h-4" /> Approve All
-                  </button>
-                </div>
-              )}
             </div>
           ))}
         </div>
