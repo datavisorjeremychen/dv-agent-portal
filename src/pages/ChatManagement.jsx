@@ -527,55 +527,77 @@ export default function ChatManagement() {
           )}
         </section>
 
-        {/* Middle: Review / Preview window (only place with Save) */}
-        <section className="bg-white border-r flex flex-col">
-          <div className="h-10 border-b px-3 flex items-center justify-between">
-            <div className="font-medium text-sm">Review / Preview</div>
-            {preview && (
-              <a href={preview.deepLink} className="text-xs text-indigo-600 inline-flex items-center gap-1" target="_blank" rel="noreferrer">
-                <ExternalLink className="w-4 h-4" /> View in Platform
-              </a>
-            )}
-          </div>
+       // In the middle column section (Review / Preview) replace its JSX with this block
+<section className="bg-white border-r flex flex-col">
+  <div className="h-10 border-b px-3 flex items-center justify-between">
+    <div className="font-medium text-sm">Review / Preview</div>
+    {preview && (
+      <a
+        href={preview.deepLink || "#"}
+        className={`text-xs inline-flex items-center gap-1 ${preview.deepLink ? "text-indigo-600" : "text-slate-400 pointer-events-none"}`}
+        target={preview.deepLink ? "_blank" : undefined}
+        rel="noreferrer"
+        title={preview.deepLink ? "View in Platform" : "Save to enable deep link"}
+      >
+        <ExternalLink className="w-4 h-4" />
+        View in Platform
+      </a>
+    )}
+  </div>
 
-          {preview ? (
-            <div className="p-3 space-y-3">
-              <div className="text-sm text-slate-500">Previewing: <span className="font-medium text-slate-700">{preview.title}</span></div>
-              <div className="border rounded p-3 bg-slate-50 text-sm min-h-[200px]">
-                {/* mock preview content */}
-                <pre className="whitespace-pre-wrap text-slate-800">{preview.content}</pre>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  className="btn btn-primary"
-                  onClick={() => {
-                    // create a fake platform URL and persist artifact into chat
-                    const kind = preview.kind; // "rule" | "feature" | "contact"
-                    const id = `${kind}-${Math.random().toString(36).slice(2, 8)}`;
-                    const url = kind === "feature" ? `#/feature/${id}` : kind === "contact" ? `#/contact/${id}` : `#/rule/${id}`;
-                    const copy = structuredClone(chats);
-                    const chatIdx = copy.findIndex((c) => c.id === preview.chatId);
-                    if (chatIdx >= 0) {
-                      copy[chatIdx].artifacts = [
-                        ...(copy[chatIdx].artifacts || []),
-                        { id, kind, name: `${kind.toUpperCase()} ${id}`, url, ts: new Date().toISOString() },
-                      ];
-                      saveChats(copy);
-                      setChats(copy);
-                    }
-                    alert(`Saved to platform as ${kind.toUpperCase()} ${id}`);
-                    setPreview({ ...preview, deepLink: url }); // show link
-                  }}
-                >
-                  Save
-                </button>
-                <button className="btn btn-ghost" onClick={() => setPreview(null)}>Close</button>
-              </div>
-            </div>
-          ) : (
-            <div className="m-auto text-slate-500 text-sm">Select a sub-agent result to preview (from the right panel).</div>
-          )}
-        </section>
+  {preview ? (
+    <div className="p-3 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className={`text-[11px] px-2 py-0.5 rounded border ${preview.kind === "feature" ? "bg-emerald-50 border-emerald-200 text-emerald-700" : "bg-indigo-50 border-indigo-200 text-indigo-700"}`}>
+          {preview.kind.toUpperCase()}
+        </span>
+        <span className="text-sm text-slate-600">Previewing:</span>
+        <span className="text-sm font-medium text-slate-800">{preview.title}</span>
+      </div>
+
+      <div className="border rounded p-3 bg-slate-50 text-sm min-h-[220px]">
+        <pre className="whitespace-pre-wrap text-slate-800">{preview.content}</pre>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <button
+          className="btn btn-primary"
+          onClick={() => {
+            // Persist as artifact + generate platform deep link
+            const kind = preview.kind; // "feature" | "rule"
+            const id = `${kind}-${Math.random().toString(36).slice(2, 8)}`;
+            const url =
+              kind === "feature" ? `#/feature/${id}` :
+              kind === "rule"    ? `#/rule/${id}`    :
+              `#/${kind}/${id}`;
+
+            // Persist into chat.artifacts
+            const copy = structuredClone(chats);
+            const chatIdx = copy.findIndex((c) => c.id === preview.chatId);
+            if (chatIdx >= 0) {
+              copy[chatIdx].artifacts = [
+                ...(copy[chatIdx].artifacts || []),
+                { id, kind, name: `${kind.toUpperCase()} ${id}`, url, ts: new Date().toISOString() },
+              ];
+              saveChats(copy);
+              setChats(copy);
+            }
+
+            // reflect link in preview header
+            setPreview({ ...preview, deepLink: url });
+            alert(`Saved ${kind.toUpperCase()} ${id} to platform.`);
+          }}
+        >
+          Save
+        </button>
+        <button className="btn btn-ghost" onClick={() => setPreview(null)}>Close</button>
+      </div>
+    </div>
+  ) : (
+    <div className="m-auto text-slate-500 text-sm">Select a sub-agent result to preview (from the right panel).</div>
+  )}
+</section>
+
 
         {/* Right: Chat Detail + Orchestration */}
         <section className="bg-white flex flex-col">
@@ -636,28 +658,85 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
     onUpdate({ tasks: copy.tasks });
   };
 
-  const openPreview = (taskId, sub) => {
-    const kind =
-      sub.name.startsWith("Generate Features") ? "feature" :
-      sub.name.startsWith("Create Rules") ? "rule" :
-      sub.name.toLowerCase().includes("contact") ? "contact" : "rule";
-    onOpenPreview({
-      chatId: chat.id,
-      taskId,
-      subId: sub.id,
-      kind,
-      title: sub.name,
-      content:
-`// Preview — ${sub.name}
+ // inside ChatDetail (replace your current openPreview with this)
+const openPreview = (taskId, sub) => {
+  // Infer entity kind from the sub-agent title
+  const kind =
+    sub.name.startsWith("Generate Features") ? "feature" :
+    sub.name.startsWith("Create Rules")     ? "rule"    :
+    sub.name.toLowerCase().includes("contact") ? "contact" : "rule";
+
+  // Build realistic preview payloads
+  const makeFeaturePreview = () => ({
+    title: sub.name,
+    content:
+`# Feature Definition (YAML)
+name: fp_ato_recent_security_change_risk
+display_name: ATO Recent Security Change Risk
+description: >
+  Signals increased ATO risk if BillPay occurs within 24h after password or 2FA changes,
+  combined with anomaly signals and identity risk flags.
+entity: user
+compute:
+  mode: offline
+  frequency: 24h
+logic:
+  expr: |
+    (
+      (has_password_change_within(24h) OR has_2fa_change_within(24h))
+      AND billpay_amount_usd > 500
+      AND socure_flags IN ["R217","R572","R633"]
+    )
+outputs:
+  type: float
+  value: if(expr, 1.0, 0.0)
+validation:
+  coverage_min: 0.02
+  drift_guard:
+    window_days: 14
+    max_psi: 0.2`,
+    kind: "feature",
+  });
+
+  const makeRulePreview = () => ({
+    title: sub.name,
+    content:
+`// Rules Engine JSON (proposed)
 {
-  "pattern": "ATO credential compromise",
-  "signals": ["recent 2FA change", "password change", "Socure R217/R572/R633", "iOS login 73.136.129.131"],
-  "hypothesis": "Increase scrutiny on BillPay > $500 within 24h of security changes",
-  "proposed_rules": ["rule_${sub.id}_1", "rule_${sub.id}_2"]
+  "name": "rule_ato_high_risk_billpay_after_security_change",
+  "version": "draft",
+  "when": {
+    "all": [
+      { "feature": "fp_ato_recent_security_change_risk", "op": ">=", "value": 0.5 },
+      { "field": "event_type", "op": "=", "value": "BILLPAY" },
+      { "field": "amount_usd", "op": ">", "value": 500 }
+    ]
+  },
+  "then": [
+    { "action": "HOLD_TRANSACTION" },
+    { "action": "REQUIRE_REAUTH" },
+    { "action": "QUEUE_CASE", "params": { "queue": "ATO Review Queue" } }
+  ],
+  "explain": "BillPay > $500 within 24h of security change + identity risk signals."
 }`,
-      deepLink: null,
-    });
-  };
+    kind: "rule",
+  });
+
+  const { title, content, kind: resolvedKind } =
+    kind === "feature" ? makeFeaturePreview() :
+    kind === "rule"    ? makeRulePreview()    :
+    { title: sub.name, content: "// Preview not available for this item.", kind: "rule" };
+
+  onOpenPreview({
+    chatId: chat.id,
+    taskId,
+    subId: sub.id,
+    kind: resolvedKind,
+    title,
+    content,
+    deepLink: null, // set after Save
+  });
+};
 
   return (
     <>
