@@ -708,28 +708,66 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
     onUpdate({ tasks: copy.tasks });
   };
 
-  const openPreview = (taskId, sub) => {
-    const kind =
+ // inside ChatDetail component
+
+const openPreview = (taskId, sub) => {
+  let content = "";
+  // choose content based on the sub-task name
+  if (sub.name.startsWith("Draft Hypothesis Rules")) {
+    content = `// Example fraud rule draft
+{
+  "pattern": "Multiple transactions from same IP",
+  "rule": "If more than 3 transactions originate from the same IP address within 10 minutes, flag the account for review.",
+  "justification": "Fraud analysts often look for common patterns such as multiple transactions from the same IP address or the same account being used to make multiple purchases:contentReference[oaicite:1]{index=1}."
+}`;
+  } else if (sub.name.startsWith("Generate Features")) {
+    content = `// Example feature definitions
+{
+  "features": [
+    {
+      "name": "tx_count_last_hour",
+      "description": "Number of transactions made by this account in the past hour."
+    },
+    {
+      "name": "avg_tx_amount_24h",
+      "description": "Average transaction amount in the last 24 hours."
+    },
+    {
+      "name": "unique_ip_count_24h",
+      "description": "Number of unique IP addresses used by this account in the past 24 hours."
+    }
+  ],
+  "notes": "These features help capture abnormal transaction behaviour such as bursts of transactions or changing IP addresses."
+}`;
+  } else if (sub.name.startsWith("Create Rules")) {
+    content = `// Example finalized rule
+{
+  "rule_id": "rule_${sub.id}_1",
+  "condition": "tx_count_last_hour > 3 && unique_ip_count_24h > 1",
+  "action": "Flag transaction for manual review",
+  "explanation": "Combines transaction frequency and IP diversity to detect anomalous behaviour."
+}`;
+  } else {
+    // default fallback
+    content = `// Preview — ${sub.name}\n${JSON.stringify({ note: 'No specific example defined' }, null, 2)}`;
+  }
+
+  // pass the content into the preview window
+  onOpenPreview({
+    chatId: chat.id,
+    taskId,
+    subId: sub.id,
+    kind:
       sub.name.startsWith("Generate Features") ? "feature" :
       sub.name.startsWith("Create Rules") ? "rule" :
-      sub.name.toLowerCase().includes("contact") ? "contact" : "rule";
-    onOpenPreview({
-      chatId: chat.id,
-      taskId,
-      subId: sub.id,
-      kind,
-      title: sub.name,
-      content:
-`// Preview — ${sub.name}
-{
-  "pattern": "ATO credential compromise",
-  "signals": ["recent 2FA change", "password change", "Socure R217/R572/R633", "iOS login 73.136.129.131"],
-  "hypothesis": "Increase scrutiny on BillPay > $500 within 24h of security changes",
-  "proposed_rules": ["rule_${sub.id}_1", "rule_${sub.id}_2"]
-}`,
-      deepLink: null,
-    });
-  };
+      sub.name.toLowerCase().includes("contact") ? "contact" :
+      "rule",
+    title: sub.name,
+    content,
+    deepLink: null,
+  });
+};
+
 
   return (
     <>
