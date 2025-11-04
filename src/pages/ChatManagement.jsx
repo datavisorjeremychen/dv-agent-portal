@@ -672,6 +672,17 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
   const [input, setInput] = useState("");
   const scroller = useRef(null);
 
+    // Gather all approved sub‑tasks that have previewId (rules/features)
+  const readyPreviewSubs = [];
+  (chat.tasks || []).forEach((task) => {
+    task.sub.forEach((sub) => {
+      if (sub.approved === true && sub.previewId) {
+        readyPreviewSubs.push({ taskId: task.id, sub });
+      }
+    });
+  });
+
+
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
   }, [chat]);
@@ -861,6 +872,24 @@ const openPreview = (taskId, sub) => {
           ))}
         </div>
       </div>
+    {/* New: preview buttons in the chat window */}
+    {readyPreviewSubs.length > 0 && (
+      <div className="px-3 py-2 border-b bg-white">
+        <span className="text-xs font-medium text-slate-600">Ready to Preview:</span>
+        <div className="flex flex-wrap gap-2 mt-1">
+          {readyPreviewSubs.map(({ taskId, sub }) => (
+            <button
+              key={sub.id}
+              className="btn btn-ghost btn-xs inline-flex items-center gap-1"
+              onClick={() => openPreview(taskId, sub)}
+            >
+              <FileText className="w-3 h-3" />
+              Preview {sub.name}
+            </button>
+          ))}
+        </div>
+      </div>
+    )}
 
       {/* Transcript */}
       <div className="flex-1 overflow-auto" ref={scroller}>
