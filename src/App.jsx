@@ -90,10 +90,12 @@ export default function App() {
 
             {/* Main content */}
             <main className="flex-1 p-4 overflow-auto">
-              {tab === "agents" && <Agents />}
-              {tab === "tasks" && <Tasks />}
-              {tab === "usage" && <Usage />}
-            </main>
+  {tab === "agents" && <Agents />}
+  {tab === "tasks" && <Tasks />}
+  {tab === "usage" && <Usage />}
+  {tab === "chats" && <ChatManagement />}       // ← NEW
+</main>
+
           </div>
         )}
       </div>
