@@ -3,6 +3,8 @@ import Agents from "./pages/Agents.jsx";
 import Tasks from "./pages/Tasks.jsx";
 import Usage from "./pages/Usage.jsx";
 import AlertAssistant from "./pages/AlertAssistant.jsx";
+import ChatManagement from "./pages/ChatManagement.jsx";
+
 
 export default function App() {
   const [section, setSection] = useState("platform");  // platform vs case_mgmt
@@ -17,10 +19,12 @@ export default function App() {
   ];
 
   const platformTabs = [
-    { id: "agents", label: "Agents" },
-    { id: "tasks", label: "Tasks" },
-    { id: "usage", label: "Usage Admin" },
-  ];
+  { id: "agents", label: "Agents" },
+  { id: "tasks", label: "Tasks" },
+  { id: "usage", label: "Usage Admin" },
+  { id: "chats", label: "Chats" },              // ← NEW
+];
+
 
   const clickNav = (id) => {
     if (id === "case") {
