@@ -43,7 +43,6 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
     if (base) {
       setName((base.name || "Agent") + " Copy");
       setDesc(base.desc || `Cloned from ${base.name || "agent"}`);
-      // Prefill prompts if present on the base agent
       setSystemPrompt(base.systemPrompt || "");
       setHelperPrompts(
         Array.isArray(base.helperPrompts)
@@ -96,6 +95,14 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
     setHelperPrompts((prev) => prev.filter((_, i) => i !== idx));
   };
 
+  // Footer button enable/disable logic (single nav area)
+  const canNext =
+    (step === 0 && !!cloneId) ||
+    (step === 1 && !!name.trim()) ||
+    (step === 2) ||
+    (step === 3);
+  const showSave = step === 4;
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/20">
       <div className="bg-white w-full max-w-2xl rounded-xl border shadow-sm">
@@ -142,11 +149,6 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
                   Cloning from: <span className="font-medium text-slate-700">{base?.name}</span>
                 </div>
               )}
-              <div className="flex justify-end">
-                <button className="btn btn-primary" onClick={() => setStep(1)} disabled={!cloneId}>
-                  Next
-                </button>
-              </div>
             </div>
           )}
 
@@ -167,11 +169,6 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
                   value={desc}
                   onChange={(e) => setDesc(e.target.value)}
                 />
-              </div>
-              <div className="flex justify-end">
-                <button className="btn btn-primary" onClick={() => setStep(2)} disabled={!name.trim()}>
-                  Next
-                </button>
               </div>
             </div>
           )}
@@ -229,12 +226,6 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
                   </div>
                 </div>
               </div>
-
-              <div className="md:col-span-2 flex justify-end">
-                <button className="btn btn-primary" onClick={() => setStep(3)}>
-                  Next
-                </button>
-              </div>
             </div>
           )}
 
@@ -251,11 +242,6 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
                 value={systemPrompt}
                 onChange={(e) => setSystemPrompt(e.target.value)}
               />
-              <div className="flex justify-end">
-                <button className="btn btn-primary" onClick={() => setStep(4)}>
-                  Next
-                </button>
-              </div>
             </div>
           )}
 
@@ -292,45 +278,32 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
                 ))}
               </div>
 
-              <div className="flex justify-between">
+              <div>
                 <button className="btn btn-ghost" onClick={addHelperPrompt}>
                   + Add prompt
                 </button>
-                <div className="flex gap-2">
-                  <button className="btn btn-ghost" onClick={() => setStep(3)}>Back</button>
-                  <button
-                    className="btn btn-primary"
-                    onClick={save}
-                    disabled={!name.trim() || !cloneId}
-                  >
-                    Save Draft
-                  </button>
-                </div>
               </div>
             </div>
           )}
         </div>
 
-        {/* Footer */}
+        {/* Footer (sole navigation area) */}
         <div className="px-4 py-3 border-t bg-slate-50 flex items-center justify-between text-xs text-slate-600">
           <span>Draft on save • Clone-based</span>
           <div className="flex gap-2">
             {step > 0 && (
               <button className="btn btn-ghost" onClick={() => setStep(step - 1)}>Back</button>
             )}
-            {step < 4 && (
+            {!showSave && (
               <button
                 className="btn btn-primary"
                 onClick={() => setStep(step + 1)}
-                disabled={
-                  (step === 0 && !cloneId) ||
-                  (step === 1 && !name.trim())
-                }
+                disabled={!canNext}
               >
                 Next
               </button>
             )}
-            {step === 4 && (
+            {showSave && (
               <button
                 className="btn btn-primary"
                 onClick={save}
