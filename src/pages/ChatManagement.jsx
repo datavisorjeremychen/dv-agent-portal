@@ -6,15 +6,13 @@ import {
 
 /**
  * Chat Management System (CMS) — v2 (updated)
- * - Left-most panel (collapsible): Platform tabs (filters/search panel removed per request)
- * - Chat history panel (collapsible) with "New Chat" button
- * - Middle "Review" panel: Preview window; ONLY place where "Save" exists
- *   • Now has a Close button that collapses the entire panel
- * - Right panel: Chat transcript + agent orchestration
- * - Sub-agent approval types:
- *   - "approve": Approve / Reject (e.g., data retrieval confirmation)
- *   - "accept": Accept / Decline (e.g., adopt proposed pattern/rule/feature)
- * - Persistence via localStorage (swap for API later)
+ * - Filters removed (per prior step). New Chat button added.
+ * - Preview panel has a Close button to collapse the whole column.
+ * - In ChatDetail (right pane):
+ *    • Sub-agent rows now show only status (Running | Finished)
+ *    • Each sub-agent has an expand/collapse chevron (default: collapsed)
+ *    • Expanded view shows "Thinking process" + per-agent input field
+ *    • Accept/Reject (or Approve/Reject) + Preview retained
  */
 
 const DB_KEY = "dv.cms.chats.v2";
@@ -169,18 +167,17 @@ export default function ChatManagement() {
   const [historyOpen, setHistoryOpen] = useState(true);
   const [chats, setChats] = useState(loadChats);
   const [projects, setProjects] = useState(loadProjects);
-  const [query] = useState(""); // removed UI; keeping state inert
-  const [filters] = useState({ userId: "", agent: "", dateFrom: "", dateTo: "", resultStatus: "" }); // removed UI; inert
-  const [section] = useState("my"); // removed UI to switch; default "my"
-  const [activeProject] = useState("all"); // removed UI; inert
+  const [query] = useState("");
+  const [filters] = useState({ userId: "", agent: "", dateFrom: "", dateTo: "", resultStatus: "" });
+  const [section] = useState("my");
+  const [activeProject] = useState("all");
   const [selectedId, setSelectedId] = useState((loadChats()[0] || {}).id || null);
 
   // Preview panel open/closed
   const [previewOpen, setPreviewOpen] = useState(true);
-  // preview modal content lives in middle panel
   const [preview, setPreview] = useState(null); // { chatId, taskId, subId, kind, title, content, deepLink }
 
-  // background progress for running tasks
+  // background task simulation (unchanged)
   useEffect(() => {
     const intv = setInterval(() => {
       setChats((prev) => {
@@ -248,9 +245,6 @@ export default function ChatManagement() {
     return () => clearInterval(intv);
   }, []);
 
-  const allAgents = useMemo(() => [...new Set(chats.flatMap((c) => c.agents || []))], [chats]);
-  const allUsers = useMemo(() => [...new Set(chats.map((c) => c.userId))], [chats]);
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const from = filters.dateFrom ? new Date(filters.dateFrom) : null;
@@ -288,15 +282,7 @@ export default function ChatManagement() {
   const toggleStar = (c) => updateChat(c.id, { isStarred: !c.isStarred });
   const toggleShare = (c) => updateChat(c.id, { isShared: !c.isShared });
 
-  const addProject = () => {
-    const name = prompt("New project/folder name");
-    if (!name) return;
-    const list = [...new Set([...projects, name])];
-    setProjects(list);
-    saveProjects(list);
-  };
-
-  // Create a brand-new chat (New Chat button)
+  // Create a brand-new chat
   const createNewChat = () => {
     const now = new Date().toISOString();
     const id = `c_${Math.random().toString(36).slice(2, 8)}`;
@@ -322,13 +308,11 @@ export default function ChatManagement() {
     setSelectedId(id);
   };
 
-  // Open preview helper (auto-open panel if collapsed)
   const handleOpenPreview = (p) => {
     setPreviewOpen(true);
     setPreview(p);
   };
 
-  // Grid columns change when preview is collapsed
   const gridCols = previewOpen
     ? "grid grid-cols-[auto_auto_minmax(420px,1fr)_minmax(420px,1.1fr)]"
     : "grid grid-cols-[auto_auto_minmax(420px,1.1fr)]";
@@ -356,7 +340,7 @@ export default function ChatManagement() {
 
       {/* Body */}
       <div className={`flex-1 ${gridCols}`}>
-        {/* Left Rail: Platform tabs (filters/search removed) */}
+        {/* Left Rail */}
         <aside className={`${leftOpen ? "w-64" : "w-8"} transition-all border-r bg-white overflow-hidden`}>
           <div className="h-10 border-b flex items-center justify-between px-2 text-sm">
             <span className="font-medium">{leftOpen ? "Platform" : ""}</span>
@@ -376,7 +360,7 @@ export default function ChatManagement() {
           )}
         </aside>
 
-        {/* Chat History (collapsible) */}
+        {/* Chat History */}
         <section className={`${historyOpen ? "w-[360px]" : "w-8"} transition-all border-r bg-white overflow-hidden`}>
           <div className="h-10 border-b flex items-center justify-between px-2 text-sm">
             <span className="font-medium">{historyOpen ? `Chats (${filtered.length})` : ""}</span>
@@ -472,7 +456,7 @@ export default function ChatManagement() {
           )}
         </section>
 
-        {/* Middle: Review / Preview window (only place with Save) */}
+        {/* Middle: Review / Preview window */}
         {previewOpen && (
           <section className="bg-white border-r flex flex-col">
             <div className="h-10 border-b px-3 flex items-center justify-between">
@@ -554,6 +538,10 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
   const [input, setInput] = useState("");
   const scroller = useRef(null);
 
+  // UI state: expanded flags per sub-agent and per-agent input values
+  const [expandedSubs, setExpandedSubs] = useState(() => ({}));            // { [subId]: boolean }
+  const [agentInputs, setAgentInputs] = useState(() => ({}));              // { [subId]: string }
+
   // Gather all approved sub-tasks that have previewId (rules/features)
   const readyPreviewSubs = [];
   (chat.tasks || []).forEach((task) => {
@@ -582,6 +570,53 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
     }, 500);
   };
 
+  // Helper: basic "thinking process" text for demo
+  const getThinking = (sub) => {
+    if (sub.name.startsWith("Fetch FN")) {
+      return [
+        "- Querying FN table for last 14 days",
+        "- Joining device + IP + auth signals",
+        "- Sampling 1k cases for vectorization summary"
+      ].join("\n");
+    }
+    if (sub.name.startsWith("Derive Fraud Pattern")) {
+      return [
+        "- Embedding event text + rules into vector space",
+        "- HDBSCAN clusters → 7 candidate groups",
+        "- Notable signal: burst from /24 with device rotation"
+      ].join("\n");
+    }
+    if (sub.name.startsWith("Draft Hypothesis Rules")) {
+      return [
+        "- Compose rule predicates from top SHAP contributors",
+        "- Constraint: recall ≥ 0.6, precision ≥ 0.6 on FN",
+        "- Draft 3 variants for backtest"
+      ].join("\n");
+    }
+    if (sub.name.startsWith("Backtest Rules")) {
+      return [
+        "- Running replay against 30d holdout",
+        "- Comparing lift vs baseline",
+        "- Recording precision/recall/F1"
+      ].join("\n");
+    }
+    if (sub.name.startsWith("Generate Features")) {
+      return [
+        "- Mining high-gain aggregates",
+        "- Validating null/latency budgets",
+        "- Emitting feature specs for approval"
+      ].join("\n");
+    }
+    if (sub.name.startsWith("Create Rules")) {
+      return [
+        "- Converting approved predicates to DSL",
+        "- Assigning severities/actions",
+        "- Preparing rollout plan"
+      ].join("\n");
+    }
+    return "- Analyzing inputs…\n- Generating outputs…";
+  };
+
   // Handle sub-agent approval
   const setApproval = (taskId, subId, decision) => {
     const copy = structuredClone(chat);
@@ -607,26 +642,24 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
       content = `// Example fraud rule draft
 {
   "pattern": "Multiple transactions from same IP",
-  "rule": "If more than 3 transactions originate from the same IP address within 10 minutes, flag the account for review.",
-  "justification": "Combines volume and source concentration to surface bursty risk."
+  "rule": "If >3 transactions from same IP within 10 minutes, flag account",
+  "notes": "Combines burst frequency and IP concentration"
 }`;
     } else if (sub.name.startsWith("Generate Features")) {
       content = `// Example feature definitions
 {
   "features": [
-    { "name": "tx_count_last_hour", "description": "Transactions in the past hour." },
-    { "name": "avg_tx_amount_24h", "description": "Average transaction amount in 24h." },
-    { "name": "unique_ip_count_24h", "description": "Distinct IPs used in 24h." }
-  ],
-  "notes": "Useful to detect bursts and device/IP rotation."
+    { "name": "tx_count_last_hour", "description": "Transactions in past hour" },
+    { "name": "avg_tx_amount_24h", "description": "Average transaction amount in 24h" },
+    { "name": "unique_ip_count_24h", "description": "Distinct IPs used in 24h" }
+  ]
 }`;
     } else if (sub.name.startsWith("Create Rules")) {
       content = `// Example finalized rule
 {
   "rule_id": "rule_${sub.id}_1",
   "condition": "tx_count_last_hour > 3 && unique_ip_count_24h > 1",
-  "action": "Flag for manual review",
-  "explanation": "Frequency + IP diversity indicates abnormal behaviour."
+  "action": "Flag for manual review"
 }`;
     } else {
       content = `// Preview — ${sub.name}\n${JSON.stringify({ note: 'No specific example defined' }, null, 2)}`;
@@ -647,19 +680,32 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
     });
   };
 
+  // Per-agent input sender
+  const sendAgentInput = (taskId, sub) => {
+    const note = (agentInputs[sub.id] || "").trim();
+    if (!note) return;
+    const ts = new Date().toISOString();
+    const transcript = [
+      ...(chat.transcript || []),
+      { who: "user", text: `(To ${sub.name}) ${note}`, ts }
+    ];
+    onUpdate({ transcript, updatedAt: ts });
+    setAgentInputs((m) => ({ ...m, [sub.id]: "" }));
+  };
+
   return (
     <>
       {/* Conversation header */}
       <div className="px-3 py-2 border-b flex items-center justify-between">
         <div>
           <div className="font-semibold text-slate-800">{chat.title}</div>
-        <div className="text-xs text-slate-500">
-          {chat.userId} • Updated {new Date(chat.updatedAt).toLocaleString()} • Model: {chat.default_model}
-        </div>
+          <div className="text-xs text-slate-500">
+            {chat.userId} • Updated {new Date(chat.updatedAt).toLocaleString()} • Model: {chat.default_model}
+          </div>
         </div>
       </div>
 
-      {/* Orchestration + approvals */}
+      {/* Orchestration + approvals (simplified status, expandable agents) */}
       <div className="px-3 py-2 border-b bg-slate-50">
         <div className="text-xs text-slate-600 mb-2">Agent Orchestration</div>
         <div className="space-y-3">
@@ -676,64 +722,101 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
                   {t.status === "awaiting-approval" && <span className="text-amber-700">Awaiting Approval</span>}
                   {t.status === "done" && (
                     <span className="text-emerald-700 inline-flex items-center gap-1">
-                      <CheckCircle2 className="w-3 h-3" /> Done
+                      <CheckCircle2 className="w-3 h-3" /> Finished
                     </span>
                   )}
                 </div>
               </div>
 
               <div className="mt-2 space-y-2">
-                {t.sub.map((s) => (
-                  <div key={s.id} className="border rounded p-2">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs text-slate-700 inline-flex items-center gap-2">
-                        {s.done ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <Circle className="w-3 h-3 text-slate-400" />}
-                        {s.name} {s.concurrent && <span className="px-1.5 py-0.5 text-[10px] rounded bg-slate-100 border">concurrent</span>}
-                      </div>
-                      <div className="text-[11px] text-slate-500">{Math.round(s.pct)}%</div>
-                    </div>
-                    <div className="w-full bg-slate-200 h-1.5 rounded mt-1">
-                      <div className={`h-1.5 rounded ${s.done ? "bg-emerald-600" : "bg-indigo-600"}`} style={{ width: `${s.pct}%` }} />
-                    </div>
-
-                    {/* Approval actions */}
-                    {s.approvalNeeded && s.done && (
-                      <div className="mt-2 p-2 bg-slate-50 border rounded text-xs">
-                        <div className="font-medium text-slate-700 mb-1">
-                          {s.approvalType === "approve" ? "Approval required" : "Accept required"}
+                {t.sub.map((s) => {
+                  const expanded = !!expandedSubs[s.id];
+                  const statusLabel = s.done ? "Finished" : "Running";
+                  return (
+                    <div key={s.id} className="border rounded">
+                      {/* Row header */}
+                      <div className="p-2 flex items-center justify-between">
+                        <div className="text-xs text-slate-700 inline-flex items-center gap-2">
+                          <button
+                            className="inline-flex items-center justify-center w-5 h-5 border rounded hover:bg-slate-50"
+                            onClick={() => setExpandedSubs((m) => ({ ...m, [s.id]: !expanded }))}
+                            title={expanded ? "Collapse" : "Expand"}
+                          >
+                            {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                          </button>
+                          {s.done ? <CheckCircle2 className="w-3 h-3 text-emerald-600" /> : <Circle className="w-3 h-3 text-slate-400" />}
+                          <span className="font-medium">{s.name}</span>
+                          {s.concurrent && <span className="px-1.5 py-0.5 text-[10px] rounded bg-slate-100 border">concurrent</span>}
                         </div>
-                        <div className="flex items-center gap-2">
-                          {s.approvalType === "approve" ? (
-                            <>
-                              <button className={`btn ${s.approved === true ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, true)}>
-                                Approve
-                              </button>
-                              <button className={`btn ${s.approved === false ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, false)}>
-                                Reject
-                              </button>
-                            </>
-                          ) : (
-                            <>
-                              <button className={`btn ${s.approved === true ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, true)}>
-                                Accept
-                              </button>
-                              <button className={`btn ${s.approved === false ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, false)}>
-                                Decline
-                              </button>
-                            </>
-                          )}
+                        <div className="text-[11px] text-slate-500">{statusLabel}</div>
+                      </div>
 
-                          {/* Preview only (Save happens in the middle Review panel) */}
-                          {s.approved === true && s.previewId && (
-                            <button className="btn btn-ghost inline-flex items-center gap-1" onClick={() => openPreview(t.id, s)}>
-                              <FileText className="w-4 h-4" /> Preview
-                            </button>
+                      {/* Expanded details */}
+                      {expanded && (
+                        <div className="p-2 border-t bg-slate-50">
+                          <div className="text-[11px] text-slate-600 mb-1 font-medium">Thinking process</div>
+                          <pre className="text-xs text-slate-800 whitespace-pre-wrap bg-white border rounded p-2">
+                            {getThinking(s)}
+                          </pre>
+
+                          <div className="mt-2">
+                            <div className="text-[11px] text-slate-600 mb-1 font-medium">Additional input (optional)</div>
+                            <div className="flex items-center gap-2">
+                              <input
+                                className="flex-1 border rounded px-2 py-1 text-xs"
+                                placeholder={`Add guidance for "${s.name}"…`}
+                                value={agentInputs[s.id] || ""}
+                                onChange={(e) => setAgentInputs((m) => ({ ...m, [s.id]: e.target.value }))}
+                                onKeyDown={(e) => e.key === "Enter" && sendAgentInput(t.id, s)}
+                              />
+                              <button
+                                className="btn btn-ghost btn-xs"
+                                onClick={() => sendAgentInput(t.id, s)}
+                              >
+                                Send
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Approval actions & Preview */}
+                          {s.approvalNeeded && s.done && (
+                            <div className="mt-2 p-2 bg-white border rounded text-xs">
+                              <div className="font-medium text-slate-700 mb-1">
+                                {s.approvalType === "approve" ? "Approval required" : "Accept required"}
+                              </div>
+                              <div className="flex items-center gap-2 flex-wrap">
+                                {s.approvalType === "approve" ? (
+                                  <>
+                                    <button className={`btn ${s.approved === true ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, true)}>
+                                      Approve
+                                    </button>
+                                    <button className={`btn ${s.approved === false ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, false)}>
+                                      Reject
+                                    </button>
+                                  </>
+                                ) : (
+                                  <>
+                                    <button className={`btn ${s.approved === true ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, true)}>
+                                      Accept
+                                    </button>
+                                    <button className={`btn ${s.approved === false ? "btn-primary" : "btn-ghost"}`} onClick={() => setApproval(t.id, s.id, false)}>
+                                      Decline
+                                    </button>
+                                  </>
+                                )}
+                                {s.approved === true && s.previewId && (
+                                  <button className="btn btn-ghost inline-flex items-center gap-1" onClick={() => openPreview(t.id, s)}>
+                                    <FileText className="w-4 h-4" /> Preview
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}
