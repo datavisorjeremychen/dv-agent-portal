@@ -6,14 +6,14 @@ import {
 } from "lucide-react";
 
 /**
- * Chat Management System (CMS) — v2 (single file)
- * - Clean chat history + search, New Chat button
- * - Preview panel with type-aware Feature/Rule preview, Accept action, collapsible Close
+ * Chat Management System (CMS) — v2 (left rail removed)
+ * - Left Rail (Platform tabs) removed
+ * - Grid reflow: History | Preview | Chat (or History | Chat when preview closed)
+ * - Preview panel: type-aware Feature/Rule preview, Accept button, collapsible Close
  * - ChatDetail: simplified status (Running/Finished), expandable “thinking”, per-agent input, Preview buttons
  */
 
 const DB_KEY = "dv.cms.chats.v2";
-const DB_PROJ = "dv.cms.projects.v1";
 const CURRENT_USER = "jeremy.chen@datavisor.com";
 
 /* -------------------------- Seed data -------------------------- */
@@ -143,17 +143,6 @@ function loadChats() {
 }
 function saveChats(list) {
   localStorage.setItem(DB_KEY, JSON.stringify(list));
-}
-function loadProjects() {
-  try {
-    const raw = localStorage.getItem(DB_PROJ);
-    return raw ? JSON.parse(raw) : ["Alert Review Automation Q&A", "Q3 Velocity Feature Development"];
-  } catch {
-    return ["Alert Review Automation Q&A"];
-  }
-}
-function saveProjects(list) {
-  localStorage.setItem(DB_PROJ, JSON.stringify(list));
 }
 
 /* ======================= Preview Components ======================= */
@@ -297,10 +286,8 @@ function RulePreview({ data }) {
 
 export default function ChatManagement() {
   const [adminMode, setAdminMode] = useState(true);
-  const [leftOpen, setLeftOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(true);
   const [chats, setChats] = useState(loadChats);
-  const [projects, setProjects] = useState(loadProjects);
 
   // Search state (Chat History header)
   const [query, setQuery] = useState("");
@@ -443,10 +430,10 @@ export default function ChatManagement() {
     setPreview(p);
   };
 
-  // Grid columns change when preview is collapsed
+  // Grid columns (no left rail)
   const gridCols = previewOpen
-    ? "grid grid-cols-[auto_auto_minmax(420px,1fr)_minmax(420px,1.1fr)]"
-    : "grid grid-cols-[auto_auto_minmax(420px,1.1fr)]";
+    ? "grid grid-cols-[auto_minmax(420px,1fr)_minmax(420px,1.1fr)]"   // History | Preview | Chat
+    : "grid grid-cols-[auto_minmax(420px,1.1fr)]";                    // History | Chat
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
@@ -471,26 +458,6 @@ export default function ChatManagement() {
 
       {/* Body */}
       <div className={`flex-1 ${gridCols}`}>
-        {/* Left Rail: Platform tabs (static) */}
-        <aside className={`${leftOpen ? "w-64" : "w-8"} transition-all border-r bg-white overflow-hidden`}>
-          <div className="h-10 border-b flex items-center justify-between px-2 text-sm">
-            <span className="font-medium">{leftOpen ? "Platform" : ""}</span>
-            <button className="text-slate-500" onClick={() => setLeftOpen((s) => !s)}>
-              {leftOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
-          </div>
-
-          {leftOpen && (
-            <div className="p-2 space-y-1">
-              <div className="px-2 py-1.5 rounded border bg-white text-sm">Insights Center</div>
-              <div className="px-2 py-1.5 rounded border bg-white text-sm">Data Studio</div>
-              <div className="px-2 py-1.5 rounded border bg-white text-sm">Feature Platform</div>
-              <div className="px-2 py-1.5 rounded border bg-white text-sm">Rules Engine</div>
-              <div className="px-2 py-1.5 rounded border bg-indigo-600 text-white text-sm">Chats</div>
-            </div>
-          )}
-        </aside>
-
         {/* Chat History (with search; cleaner rows) */}
         <section className={`${historyOpen ? "w-[360px]" : "w-8"} transition-all border-r bg-white overflow-hidden`}>
           <div className="h-10 border-b flex items-center justify-between px-2 text-sm">
