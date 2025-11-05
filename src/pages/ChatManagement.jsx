@@ -1,18 +1,16 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Search, Star, StarOff, Share2, FolderPlus, Clock, User2, Filter, CheckCircle2,
-  Circle, Loader2, Play, FileText, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X
+  Search, Clock, User2, CheckCircle2,
+  Circle, Loader2, Play, FileText, ExternalLink,
+  ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X
 } from "lucide-react";
 
 /**
  * Chat Management System (CMS) — v2 (updated)
- * - Filters removed (per prior step). New Chat button added.
- * - Preview panel has a Close button to collapse the whole column.
- * - In ChatDetail (right pane):
- *    • Sub-agent rows now show only status (Running | Finished)
- *    • Each sub-agent has an expand/collapse chevron (default: collapsed)
- *    • Expanded view shows "Thinking process" + per-agent input field
- *    • Accept/Reject (or Approve/Reject) + Preview retained
+ * - Artifacts section removed
+ * - Chat History panel: cleaner rows + search box
+ * - Preview panel still collapsible via Close button
+ * - ChatDetail keeps simplified agent statuses + expand thinking + per-agent input
  */
 
 const DB_KEY = "dv.cms.chats.v2";
@@ -167,7 +165,11 @@ export default function ChatManagement() {
   const [historyOpen, setHistoryOpen] = useState(true);
   const [chats, setChats] = useState(loadChats);
   const [projects, setProjects] = useState(loadProjects);
-  const [query] = useState("");
+
+  // Search state (now visible in Chat History header)
+  const [query, setQuery] = useState("");
+
+  // Removed filters/sections UI; keep minimal defaults
   const [filters] = useState({ userId: "", agent: "", dateFrom: "", dateTo: "", resultStatus: "" });
   const [section] = useState("my");
   const [activeProject] = useState("all");
@@ -256,13 +258,12 @@ export default function ChatManagement() {
         if (activeProject !== "all" && c.project !== activeProject) return false;
         if (from && new Date(c.updatedAt) < from) return false;
         if (to && new Date(c.updatedAt) > to) return false;
+
         if (!q) return true;
+        // Search title + transcript text
         const hay = [
           c.title,
-          c.userId,
           ...(c.transcript || []).map((t) => t.text),
-          ...(c.agents || []),
-          ...(c.artifacts || []).map((a) => a.name),
         ].join(" ").toLowerCase();
         return hay.includes(q);
       })
@@ -279,10 +280,7 @@ export default function ChatManagement() {
     });
   };
 
-  const toggleStar = (c) => updateChat(c.id, { isStarred: !c.isStarred });
-  const toggleShare = (c) => updateChat(c.id, { isShared: !c.isShared });
-
-  // Create a brand-new chat
+  // Create a brand-new chat (New Chat button)
   const createNewChat = () => {
     const now = new Date().toISOString();
     const id = `c_${Math.random().toString(36).slice(2, 8)}`;
@@ -313,6 +311,7 @@ export default function ChatManagement() {
     setPreview(p);
   };
 
+  // Grid columns change when preview is collapsed
   const gridCols = previewOpen
     ? "grid grid-cols-[auto_auto_minmax(420px,1fr)_minmax(420px,1.1fr)]"
     : "grid grid-cols-[auto_auto_minmax(420px,1.1fr)]";
@@ -340,7 +339,7 @@ export default function ChatManagement() {
 
       {/* Body */}
       <div className={`flex-1 ${gridCols}`}>
-        {/* Left Rail */}
+        {/* Left Rail: Platform tabs (static) */}
         <aside className={`${leftOpen ? "w-64" : "w-8"} transition-all border-r bg-white overflow-hidden`}>
           <div className="h-10 border-b flex items-center justify-between px-2 text-sm">
             <span className="font-medium">{leftOpen ? "Platform" : ""}</span>
@@ -360,7 +359,7 @@ export default function ChatManagement() {
           )}
         </aside>
 
-        {/* Chat History */}
+        {/* Chat History (with search; cleaner rows) */}
         <section className={`${historyOpen ? "w-[360px]" : "w-8"} transition-all border-r bg-white overflow-hidden`}>
           <div className="h-10 border-b flex items-center justify-between px-2 text-sm">
             <span className="font-medium">{historyOpen ? `Chats (${filtered.length})` : ""}</span>
@@ -382,11 +381,28 @@ export default function ChatManagement() {
 
           {historyOpen && (
             <div>
+              {/* Search box */}
+              <div className="p-2 border-b">
+                <div className="relative">
+                  <Search className="w-4 h-4 absolute left-2 top-2.5 text-slate-400" />
+                  <input
+                    className="w-full border rounded pl-8 pr-2 py-1.5 text-sm"
+                    placeholder="Search chats…"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Updated label */}
               <div className="px-3 py-2 text-xs text-slate-500 flex items-center gap-1">
                 <Clock className="w-3 h-3" /> Updated
               </div>
+
+              {/* Cleaner list rows */}
               {filtered.map((c) => {
                 const active = c.id === selectedId;
+                const lastLine = (c.transcript?.[c.transcript.length - 1]?.text || "").replace(/\s+/g, " ");
                 return (
                   <button
                     key={c.id}
@@ -394,64 +410,16 @@ export default function ChatManagement() {
                     className={`w-full text-left px-3 py-2 border-b hover:bg-slate-50 ${active ? "bg-indigo-50" : "bg-white"}`}
                   >
                     <div className="flex items-center justify-between">
-                      <div className="font-medium text-slate-800 text-sm line-clamp-1">{c.title}</div>
-                      <div className="text-xs text-slate-500">{new Date(c.updatedAt).toLocaleString()}</div>
+                      <div className="font-medium text-slate-800 text-sm truncate">{c.title}</div>
+                      <div className="text-xs text-slate-500 ml-2 shrink-0">{new Date(c.updatedAt).toLocaleString()}</div>
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5 line-clamp-2">
-                      {(c.transcript?.[c.transcript.length - 1]?.text || "").slice(0, 140)}
-                    </div>
-                    <div className="mt-1 flex items-center gap-2">
-                      <span className="text-[11px] px-1.5 py-0.5 rounded bg-slate-100 border text-slate-700">{c.userId}</span>
-                      {(c.agents || []).slice(0, 3).map((a) => (
-                        <span key={a} className="text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200 text-indigo-700">{a}</span>
-                      ))}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleShare(c); }}
-                        className="ml-auto text-xs text-slate-500 hover:text-indigo-600 inline-flex items-center gap-1"
-                      >
-                        <Share2 className="w-3 h-3" /> {c.isShared ? "Unshare" : "Share"}
-                      </button>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleStar(c); }}
-                        className="text-xs text-slate-500 hover:text-amber-600 inline-flex items-center gap-1"
-                      >
-                        {c.isStarred ? <Star className="w-3 h-3 text-amber-500" /> : <StarOff className="w-3 h-3" />} Star
-                      </button>
+                    <div className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                      {lastLine}
                     </div>
                   </button>
                 );
               })}
               {filtered.length === 0 && <div className="p-4 text-sm text-slate-500">No chats.</div>}
-
-              {/* Artifacts List */}
-              <div className="mt-4 border-t">
-                <div className="w-full px-3 py-2 text-sm bg-slate-50 font-medium">Artifacts</div>
-                <div className="p-2 space-y-2 max-h-[240px] overflow-auto">
-                  {filtered.flatMap((c) =>
-                    (c.artifacts || []).map((a) => (
-                      <div key={a.id} className="border rounded px-2 py-1 text-xs flex items-center gap-2 bg-white">
-                        <span className="font-medium text-indigo-700">
-                          {a.kind === "rule" ? "Rule" : a.kind === "feature" ? "Feature" : "Contact"}
-                        </span>
-                        <span className="text-slate-700 truncate flex-1">{a.name}</span>
-                        <span className="text-slate-400">{new Date(a.ts).toLocaleDateString()}</span>
-                        <a
-                          href={a.url || "#"}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-indigo-600 hover:underline flex items-center gap-1"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      </div>
-                    ))
-                  )}
-                  {filtered.every((c) => (c.artifacts || []).length === 0) && (
-                    <div className="text-slate-500 text-xs px-2 py-3">No artifacts created yet.</div>
-                  )}
-                </div>
-              </div>
             </div>
           )}
         </section>
@@ -539,8 +507,8 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
   const scroller = useRef(null);
 
   // UI state: expanded flags per sub-agent and per-agent input values
-  const [expandedSubs, setExpandedSubs] = useState(() => ({}));            // { [subId]: boolean }
-  const [agentInputs, setAgentInputs] = useState(() => ({}));              // { [subId]: string }
+  const [expandedSubs, setExpandedSubs] = useState(() => ({}));   // { [subId]: boolean }
+  const [agentInputs, setAgentInputs] = useState(() => ({}));     // { [subId]: string }
 
   // Gather all approved sub-tasks that have previewId (rules/features)
   const readyPreviewSubs = [];
@@ -730,7 +698,10 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
 
               <div className="mt-2 space-y-2">
                 {t.sub.map((s) => {
-                  const expanded = !!expandedSubs[s.id];
+                  const [expanded, setExpanded] = [
+                    !!expandedSubs[s.id],
+                    (val) => setExpandedSubs((m) => ({ ...m, [s.id]: typeof val === "boolean" ? val : !m[s.id] }))
+                  ];
                   const statusLabel = s.done ? "Finished" : "Running";
                   return (
                     <div key={s.id} className="border rounded">
@@ -739,7 +710,7 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
                         <div className="text-xs text-slate-700 inline-flex items-center gap-2">
                           <button
                             className="inline-flex items-center justify-center w-5 h-5 border rounded hover:bg-slate-50"
-                            onClick={() => setExpandedSubs((m) => ({ ...m, [s.id]: !expanded }))}
+                            onClick={() => setExpanded()}
                             title={expanded ? "Collapse" : "Expand"}
                           >
                             {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
