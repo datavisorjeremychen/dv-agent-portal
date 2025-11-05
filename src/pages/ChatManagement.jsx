@@ -1,14 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search, Star, StarOff, Share2, FolderPlus, Clock, User2, Filter, CheckCircle2,
-  Circle, Loader2, Play, FileText, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp
+  Circle, Loader2, Play, FileText, ExternalLink, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Plus, X
 } from "lucide-react";
 
 /**
- * Chat Management System (CMS) — v2
- * - Left-most panel (collapsible): Platform tabs + expandable search/filters (visible when Chats is active)
- * - Chat history panel (collapsible) with more seeded chats
+ * Chat Management System (CMS) — v2 (updated)
+ * - Left-most panel (collapsible): Platform tabs (filters/search panel removed per request)
+ * - Chat history panel (collapsible) with "New Chat" button
  * - Middle "Review" panel: Preview window; ONLY place where "Save" exists
+ *   • Now has a Close button that collapses the entire panel
  * - Right panel: Chat transcript + agent orchestration
  * - Sub-agent approval types:
  *   - "approve": Approve / Reject (e.g., data retrieval confirmation)
@@ -166,19 +167,18 @@ export default function ChatManagement() {
   const [adminMode, setAdminMode] = useState(true);
   const [leftOpen, setLeftOpen] = useState(true);
   const [historyOpen, setHistoryOpen] = useState(true);
-  const [filtersOpen, setFiltersOpen] = useState(true); // filters under Chats tab
   const [chats, setChats] = useState(loadChats);
   const [projects, setProjects] = useState(loadProjects);
-  const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState({ userId: "", agent: "", dateFrom: "", dateTo: "", resultStatus: "" });
-  const [section, setSection] = useState("my"); // my | shared | starred | all
-  const [activeProject, setActiveProject] = useState("all");
+  const [query] = useState(""); // removed UI; keeping state inert
+  const [filters] = useState({ userId: "", agent: "", dateFrom: "", dateTo: "", resultStatus: "" }); // removed UI; inert
+  const [section] = useState("my"); // removed UI to switch; default "my"
+  const [activeProject] = useState("all"); // removed UI; inert
   const [selectedId, setSelectedId] = useState((loadChats()[0] || {}).id || null);
-  const [showArtifacts, setShowArtifacts] = useState(true);
 
-
-  // preview modal content lives in middle panel; but we manage selection here
-  const [preview, setPreview] = useState(null); // { chatId, taskId, subId, kind, title, content }
+  // Preview panel open/closed
+  const [previewOpen, setPreviewOpen] = useState(true);
+  // preview modal content lives in middle panel
+  const [preview, setPreview] = useState(null); // { chatId, taskId, subId, kind, title, content, deepLink }
 
   // background progress for running tasks
   useEffect(() => {
@@ -227,13 +227,13 @@ export default function ChatManagement() {
             }
 
             // done if all complete & no pending approvals
-           const pendingApproval = task.sub.some(
-  (x) => x.approvalNeeded && x.done && x.approved == null
-);
-if (task.sub.every((x) => x.done) && !pendingApproval) {
-  task.status = 'done';
-  copy.finalStatus = 'done';
-}
+            const pendingApproval = task.sub.some(
+              (x) => x.approvalNeeded && x.done && x.approved == null
+            );
+            if (task.sub.every((x) => x.done) && !pendingApproval) {
+              task.status = 'done';
+              copy.finalStatus = 'done';
+            }
           });
           if (JSON.stringify(copy) !== JSON.stringify(c)) {
             copy.updatedAt = new Date().toISOString();
@@ -259,16 +259,7 @@ if (task.sub.every((x) => x.done) && !pendingApproval) {
       .filter((c) => {
         if (!adminMode && c.userId !== CURRENT_USER) return false;
         if (section === "my" && c.userId !== CURRENT_USER) return false;
-        if (section === "shared" && !c.isShared) return false;
-        if (section === "starred" && !c.isStarred) return false;
-        if (section === "all" && !adminMode) return false;
         if (activeProject !== "all" && c.project !== activeProject) return false;
-        if (filters.userId && c.userId !== filters.userId) return false;
-        if (filters.agent && !(c.agents || []).includes(filters.agent)) return false;
-        if (filters.resultStatus) {
-          const map = { "In Progress": "in-progress", "Done": "done" };
-          if (c.finalStatus !== map[filters.resultStatus]) return false;
-        }
         if (from && new Date(c.updatedAt) < from) return false;
         if (to && new Date(c.updatedAt) > to) return false;
         if (!q) return true;
@@ -305,7 +296,42 @@ if (task.sub.every((x) => x.done) && !pendingApproval) {
     saveProjects(list);
   };
 
-  /* ---------------------------- Layout ---------------------------- */
+  // Create a brand-new chat (New Chat button)
+  const createNewChat = () => {
+    const now = new Date().toISOString();
+    const id = `c_${Math.random().toString(36).slice(2, 8)}`;
+    const newChat = {
+      id,
+      title: "New Chat",
+      createdAt: now,
+      updatedAt: now,
+      userId: CURRENT_USER,
+      isStarred: false,
+      isShared: false,
+      project: "Alert Review Automation Q&A",
+      agents: [],
+      transcript: [{ who: "bot", text: "How can I help? Ask me to retrieve data, draft rules, generate features, or run a backtest.", ts: now }],
+      default_model: "gpt-5o",
+      artifacts: [],
+      finalStatus: "in-progress",
+      tasks: [],
+    };
+    const list = [newChat, ...chats];
+    setChats(list);
+    saveChats(list);
+    setSelectedId(id);
+  };
+
+  // Open preview helper (auto-open panel if collapsed)
+  const handleOpenPreview = (p) => {
+    setPreviewOpen(true);
+    setPreview(p);
+  };
+
+  // Grid columns change when preview is collapsed
+  const gridCols = previewOpen
+    ? "grid grid-cols-[auto_auto_minmax(420px,1fr)_minmax(420px,1.1fr)]"
+    : "grid grid-cols-[auto_auto_minmax(420px,1.1fr)]";
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
@@ -328,9 +354,9 @@ if (task.sub.every((x) => x.done) && !pendingApproval) {
         </div>
       </header>
 
-      {/* Body: 4 logical areas (left rail, history, review, detail). Left & history are collapsible */}
-      <div className="flex-1 grid grid-cols-[auto_auto_minmax(420px,1fr)_minmax(420px,1.1fr)]">
-        {/* Left Rail: Platform tabs + expandable filters (visible in Chats) */}
+      {/* Body */}
+      <div className={`flex-1 ${gridCols}`}>
+        {/* Left Rail: Platform tabs (filters/search removed) */}
         <aside className={`${leftOpen ? "w-64" : "w-8"} transition-all border-r bg-white overflow-hidden`}>
           <div className="h-10 border-b flex items-center justify-between px-2 text-sm">
             <span className="font-medium">{leftOpen ? "Platform" : ""}</span>
@@ -340,138 +366,12 @@ if (task.sub.every((x) => x.done) && !pendingApproval) {
           </div>
 
           {leftOpen && (
-            <div className="p-2 space-y-2">
-              {/* 4 tabs (static labels for demo) */}
-              <div className="space-y-1">
-                <div className="px-2 py-1.5 rounded border bg-white text-sm">Insights Center</div>
-                <div className="px-2 py-1.5 rounded border bg-white text-sm">Data Studio</div>
-                <div className="px-2 py-1.5 rounded border bg-white text-sm">Feature Platform</div>
-                <div className="px-2 py-1.5 rounded border bg-white text-sm">Rules Engine</div>
-                <div className="px-2 py-1.5 rounded border bg-indigo-600 text-white text-sm">Chats</div>
-              </div>
-
-              {/* Expandable Search & Filters for Chats */}
-              <div className="mt-2 border rounded">
-                <button
-                  className="w-full px-2 py-1.5 flex items-center justify-between text-sm border-b bg-slate-50"
-                  onClick={() => setFiltersOpen((s) => !s)}
-                >
-                  <span className="inline-flex items-center gap-2">
-                    <Filter className="w-4 h-4" /> Search & Filters
-                  </span>
-                  {filtersOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                </button>
-
-                {filtersOpen && (
-                  <div className="p-2 space-y-2">
-                    <div className="relative">
-                      <Search className="w-4 h-4 absolute left-2 top-2.5 text-slate-400" />
-                      <input
-                        className="w-full border rounded pl-8 pr-2 py-1.5 text-sm"
-                        placeholder="Find chats, agents, artifacts…"
-                        value={query}
-                        onChange={(e) => setQuery(e.target.value)}
-                      />
-                    </div>
-
-                    <select
-                      className="w-full border rounded px-2 py-1.5 text-sm"
-                      value={filters.userId}
-                      onChange={(e) => setFilters((f) => ({ ...f, userId: e.target.value }))}
-                    >
-                      <option value="">User (any)</option>
-                      {[...new Set(chats.map((c) => c.userId))].map((u) => (
-                        <option key={u} value={u}>{u}</option>
-                      ))}
-                    </select>
-
-                    <select
-                      className="w-full border rounded px-2 py-1.5 text-sm"
-                      value={filters.agent}
-                      onChange={(e) => setFilters((f) => ({ ...f, agent: e.target.value }))}
-                    >
-                      <option value="">Agent (any)</option>
-                      {[...new Set(chats.flatMap((c) => c.agents || []))].map((a) => (
-                        <option key={a} value={a}>{a}</option>
-                      ))}
-                    </select>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="date"
-                        className="border rounded px-2 py-1.5 text-sm"
-                        value={filters.dateFrom}
-                        onChange={(e) => setFilters((f) => ({ ...f, dateFrom: e.target.value }))}
-                      />
-                      <input
-                        type="date"
-                        className="border rounded px-2 py-1.5 text-sm"
-                        value={filters.dateTo}
-                        onChange={(e) => setFilters((f) => ({ ...f, dateTo: e.target.value }))}
-                      />
-                    </div>
-
-                    <select
-                      className="w-full border rounded px-2 py-1.5 text-sm"
-                      value={filters.resultStatus}
-                      onChange={(e) => setFilters((f) => ({ ...f, resultStatus: e.target.value }))}
-                    >
-                      <option value="">Status (any)</option>
-                      <option>In Progress</option>
-                      <option>Done</option>
-                    </select>
-
-                    <div className="pt-2 border-t">
-                      <div className="text-xs font-medium text-slate-500 mb-1">Projects</div>
-                      <button
-                        className={`w-full text-left px-2 py-1.5 rounded text-sm border ${activeProject === "all" ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
-                        onClick={() => setActiveProject("all")}
-                      >
-                        All
-                      </button>
-                      {loadProjects().map((p) => (
-                        <button
-                          key={p}
-                          className={`mt-1 w-full text-left px-2 py-1.5 rounded text-sm border ${activeProject === p ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
-                          onClick={() => setActiveProject(p)}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                      <button className="mt-2 w-full text-left text-xs text-indigo-600" onClick={() => {
-                        const name = prompt("New project/folder name");
-                        if (!name) return;
-                        const list = [...new Set([...projects, name])];
-                        setProjects(list);
-                        saveProjects(list);
-                      }}>
-                        <FolderPlus className="w-4 h-4 inline mr-1" /> Add Project
-                      </button>
-                    </div>
-
-                    <div className="pt-2 border-t">
-                      <div className="text-xs font-medium text-slate-500 mb-1">Sections</div>
-                      {["my","shared","starred"].map(sec => (
-                        <button
-                          key={sec}
-                          className={`mr-1 mb-1 inline-flex items-center px-2 py-1 rounded text-xs border ${section === sec ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
-                          onClick={() => setSection(sec)}
-                        >
-                          {sec === "my" ? "My Chats" : sec === "shared" ? "Shared with Me" : "Starred"}
-                        </button>
-                      ))}
-                      {adminMode && (
-                        <button
-                          className={`inline-flex items-center px-2 py-1 rounded text-xs border ${section === "all" ? "bg-indigo-50 border-indigo-200" : "border-slate-200"}`}
-                          onClick={() => setSection("all")}
-                        >
-                          All (Admin)
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
+            <div className="p-2 space-y-1">
+              <div className="px-2 py-1.5 rounded border bg-white text-sm">Insights Center</div>
+              <div className="px-2 py-1.5 rounded border bg-white text-sm">Data Studio</div>
+              <div className="px-2 py-1.5 rounded border bg-white text-sm">Feature Platform</div>
+              <div className="px-2 py-1.5 rounded border bg-white text-sm">Rules Engine</div>
+              <div className="px-2 py-1.5 rounded border bg-indigo-600 text-white text-sm">Chats</div>
             </div>
           )}
         </aside>
@@ -480,9 +380,20 @@ if (task.sub.every((x) => x.done) && !pendingApproval) {
         <section className={`${historyOpen ? "w-[360px]" : "w-8"} transition-all border-r bg-white overflow-hidden`}>
           <div className="h-10 border-b flex items-center justify-between px-2 text-sm">
             <span className="font-medium">{historyOpen ? `Chats (${filtered.length})` : ""}</span>
-            <button className="text-slate-500" onClick={() => setHistoryOpen((s) => !s)}>
-              {historyOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-            </button>
+            <div className="flex items-center gap-2">
+              {historyOpen && (
+                <button
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border bg-indigo-600 text-white hover:brightness-95"
+                  onClick={createNewChat}
+                  title="Create a new chat"
+                >
+                  <Plus className="w-3 h-3" /> New Chat
+                </button>
+              )}
+              <button className="text-slate-500" onClick={() => setHistoryOpen((s) => !s)}>
+                {historyOpen ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           {historyOpen && (
@@ -526,130 +437,99 @@ if (task.sub.every((x) => x.done) && !pendingApproval) {
                   </button>
                 );
               })}
-              {filtered.length === 0 && <div className="p-4 text-sm text-slate-500">No chats match filters.</div>}
+              {filtered.length === 0 && <div className="p-4 text-sm text-slate-500">No chats.</div>}
+
               {/* Artifacts List */}
-<div className="mt-4 border-t">
-  <button
-    className="w-full px-3 py-2 flex items-center justify-between text-sm bg-slate-50"
-    onClick={() => setShowArtifacts?.((s) => !s)}
-  >
-    <span className="font-medium">Artifacts</span>
-    {showArtifacts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-  </button>
-
-  {showArtifacts && (
-    <div className="p-2 space-y-2 max-h-[240px] overflow-auto">
-      {filtered.flatMap((c) =>
-        (c.artifacts || []).map((a) => (
-          <div key={a.id} className="border rounded px-2 py-1 text-xs flex items-center gap-2 bg-white">
-            <span className="font-medium text-indigo-700">
-              {a.kind === "rule" ? "Rule" : a.kind === "feature" ? "Feature" : "Contact"}
-            </span>
-            <span className="text-slate-700 truncate flex-1">{a.name}</span>
-            <span className="text-slate-400">{new Date(a.ts).toLocaleDateString()}</span>
-
-            {/* Preview */}
-            <button
-              className="text-indigo-600 hover:underline"
-              onClick={(e) => {
-                e.stopPropagation();
-                const chat = chats.find((cc) => cc.id === c.id);
-                const task = chat.tasks?.find((t) =>
-                  t.sub.some((s) => a.name?.includes(s.id))
-                );
-                const sub = task?.sub?.find((s) => a.name?.includes(s.id));
-                if (task && sub) {
-                  onOpenPreview({
-                    chatId: c.id,
-                    taskId: task.id,
-                    subId: sub.id,
-                    kind: a.kind,
-                    title: a.name,
-                    content: `Recovered artifact: ${a.name}`,
-                    deepLink: a.url || null,
-                  });
-                }
-              }}
-            >
-              Preview
-            </button>
-
-            {/* Platform link if saved */}
-            {a.url && (
-              <a
-                href={a.url}
-                target="_blank"
-                rel="noreferrer"
-                className="text-indigo-600 hover:underline flex items-center gap-1"
-                onClick={(e) => e.stopPropagation()}
-              >
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            )}
-          </div>
-        ))
-      )}
-
-      {filtered.every((c) => (c.artifacts || []).length === 0) && (
-        <div className="text-slate-500 text-xs px-2 py-3">No artifacts created yet.</div>
-      )}
-    </div>
-  )}
-</div>
-
+              <div className="mt-4 border-t">
+                <div className="w-full px-3 py-2 text-sm bg-slate-50 font-medium">Artifacts</div>
+                <div className="p-2 space-y-2 max-h-[240px] overflow-auto">
+                  {filtered.flatMap((c) =>
+                    (c.artifacts || []).map((a) => (
+                      <div key={a.id} className="border rounded px-2 py-1 text-xs flex items-center gap-2 bg-white">
+                        <span className="font-medium text-indigo-700">
+                          {a.kind === "rule" ? "Rule" : a.kind === "feature" ? "Feature" : "Contact"}
+                        </span>
+                        <span className="text-slate-700 truncate flex-1">{a.name}</span>
+                        <span className="text-slate-400">{new Date(a.ts).toLocaleDateString()}</span>
+                        <a
+                          href={a.url || "#"}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-indigo-600 hover:underline flex items-center gap-1"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    ))
+                  )}
+                  {filtered.every((c) => (c.artifacts || []).length === 0) && (
+                    <div className="text-slate-500 text-xs px-2 py-3">No artifacts created yet.</div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
         </section>
 
         {/* Middle: Review / Preview window (only place with Save) */}
-        <section className="bg-white border-r flex flex-col">
-          <div className="h-10 border-b px-3 flex items-center justify-between">
-            <div className="font-medium text-sm">Review / Preview</div>
-            {preview && (
-              <a href={preview.deepLink} className="text-xs text-indigo-600 inline-flex items-center gap-1" target="_blank" rel="noreferrer">
-                <ExternalLink className="w-4 h-4" /> View in Platform
-              </a>
-            )}
-          </div>
-
-          {preview ? (
-            <div className="p-3 space-y-3">
-              <div className="text-sm text-slate-500">Previewing: <span className="font-medium text-slate-700">{preview.title}</span></div>
-              <div className="border rounded p-3 bg-slate-50 text-sm min-h-[200px]">
-                {/* mock preview content */}
-                <pre className="whitespace-pre-wrap text-slate-800">{preview.content}</pre>
-              </div>
+        {previewOpen && (
+          <section className="bg-white border-r flex flex-col">
+            <div className="h-10 border-b px-3 flex items-center justify-between">
+              <div className="font-medium text-sm">Review / Preview</div>
               <div className="flex items-center gap-2">
+                {preview && (
+                  <a href={preview.deepLink || "#"} className="text-xs text-indigo-600 inline-flex items-center gap-1" target="_blank" rel="noreferrer">
+                    <ExternalLink className="w-4 h-4" /> View in Platform
+                  </a>
+                )}
                 <button
-                  className="btn btn-primary"
-                  onClick={() => {
-                    // create a fake platform URL and persist artifact into chat
-                    const kind = preview.kind; // "rule" | "feature" | "contact"
-                    const id = `${kind}-${Math.random().toString(36).slice(2, 8)}`;
-                    const url = kind === "feature" ? `#/feature/${id}` : kind === "contact" ? `#/contact/${id}` : `#/rule/${id}`;
-                    const copy = structuredClone(chats);
-                    const chatIdx = copy.findIndex((c) => c.id === preview.chatId);
-                    if (chatIdx >= 0) {
-                      copy[chatIdx].artifacts = [
-                        ...(copy[chatIdx].artifacts || []),
-                        { id, kind, name: `${kind.toUpperCase()} ${id}`, url, ts: new Date().toISOString() },
-                      ];
-                      saveChats(copy);
-                      setChats(copy);
-                    }
-                    alert(`Saved to platform as ${kind.toUpperCase()} ${id}`);
-                    setPreview({ ...preview, deepLink: url }); // show link
-                  }}
+                  className="inline-flex items-center gap-1 text-xs px-2 py-1 rounded border bg-white hover:bg-slate-50"
+                  onClick={() => { setPreview(null); setPreviewOpen(false); }}
+                  title="Close preview panel"
                 >
-                  Save
+                  <X className="w-3 h-3" /> Close
                 </button>
-                <button className="btn btn-ghost" onClick={() => setPreview(null)}>Close</button>
               </div>
             </div>
-          ) : (
-            <div className="m-auto text-slate-500 text-sm">Select a sub-agent result to preview (from the right panel).</div>
-          )}
-        </section>
+
+            {preview ? (
+              <div className="p-3 space-y-3">
+                <div className="text-sm text-slate-500">Previewing: <span className="font-medium text-slate-700">{preview.title}</span></div>
+                <div className="border rounded p-3 bg-slate-50 text-sm min-h-[200px]">
+                  <pre className="whitespace-pre-wrap text-slate-800">{preview.content}</pre>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => {
+                      const kind = preview.kind; // "rule" | "feature" | "contact"
+                      const id = `${kind}-${Math.random().toString(36).slice(2, 8)}`;
+                      const url = kind === "feature" ? `#/feature/${id}` : kind === "contact" ? `#/contact/${id}` : `#/rule/${id}`;
+                      const copy = structuredClone(chats);
+                      const chatIdx = copy.findIndex((c) => c.id === preview.chatId);
+                      if (chatIdx >= 0) {
+                        copy[chatIdx].artifacts = [
+                          ...(copy[chatIdx].artifacts || []),
+                          { id, kind, name: `${kind.toUpperCase()} ${id}`, url, ts: new Date().toISOString() },
+                        ];
+                        saveChats(copy);
+                        setChats(copy);
+                      }
+                      alert(`Saved to platform as ${kind.toUpperCase()} ${id}`);
+                      setPreview({ ...preview, deepLink: url }); // show link
+                    }}
+                  >
+                    Save
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => setPreview(null)}>Close Preview</button>
+                </div>
+              </div>
+            ) : (
+              <div className="m-auto text-slate-500 text-sm">Select a sub-agent result to preview (from the right panel).</div>
+            )}
+          </section>
+        )}
 
         {/* Right: Chat Detail + Orchestration */}
         <section className="bg-white flex flex-col">
@@ -657,7 +537,7 @@ if (task.sub.every((x) => x.done) && !pendingApproval) {
             <ChatDetail
               chat={selected}
               onUpdate={(patch) => updateChat(selected.id, patch)}
-              onOpenPreview={setPreview}
+              onOpenPreview={handleOpenPreview}
             />
           ) : (
             <div className="m-auto text-slate-500">Select a chat to view details</div>
@@ -674,7 +554,7 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
   const [input, setInput] = useState("");
   const scroller = useRef(null);
 
-    // Gather all approved sub‑tasks that have previewId (rules/features)
+  // Gather all approved sub-tasks that have previewId (rules/features)
   const readyPreviewSubs = [];
   (chat.tasks || []).forEach((task) => {
     task.sub.forEach((sub) => {
@@ -683,7 +563,6 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
       }
     });
   });
-
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
@@ -705,86 +584,68 @@ function ChatDetail({ chat, onUpdate, onOpenPreview }) {
 
   // Handle sub-agent approval
   const setApproval = (taskId, subId, decision) => {
-  const copy = structuredClone(chat);
-  const t = copy.tasks.find((x) => x.id === taskId);
-  const s = t?.sub.find((x) => x.id === subId);
-  if (!s) return;
-  s.approved = decision;
+    const copy = structuredClone(chat);
+    const t = copy.tasks.find((x) => x.id === taskId);
+    const s = t?.sub.find((x) => x.id === subId);
+    if (!s) return;
+    s.approved = decision;
 
-  // Only pause for approvals on sub‑tasks that are done
-  const pending = t.sub.some(
-    (x) => x.approvalNeeded && x.done && x.approved == null
-  );
+    const pending = t.sub.some(
+      (x) => x.approvalNeeded && x.done && x.approved == null
+    );
 
-  // If no completed sub‑tasks need approval, set the status back to running
-  if (!pending) {
-    t.status = t.sub.every((x) => x.done) ? 'done' : 'running';
-  }
+    if (!pending) {
+      t.status = t.sub.every((x) => x.done) ? 'done' : 'running';
+    }
 
-  onUpdate({ tasks: copy.tasks });
-};
+    onUpdate({ tasks: copy.tasks });
+  };
 
-
- // inside ChatDetail component
-
-const openPreview = (taskId, sub) => {
-  let content = "";
-  // choose content based on the sub-task name
-  if (sub.name.startsWith("Draft Hypothesis Rules")) {
-    content = `// Example fraud rule draft
+  const openPreview = (taskId, sub) => {
+    let content = "";
+    if (sub.name.startsWith("Draft Hypothesis Rules")) {
+      content = `// Example fraud rule draft
 {
   "pattern": "Multiple transactions from same IP",
   "rule": "If more than 3 transactions originate from the same IP address within 10 minutes, flag the account for review.",
-  "justification": "Fraud analysts often look for common patterns such as multiple transactions from the same IP address or the same account being used to make multiple purchases:contentReference[oaicite:1]{index=1}."
+  "justification": "Combines volume and source concentration to surface bursty risk."
 }`;
-  } else if (sub.name.startsWith("Generate Features")) {
-    content = `// Example feature definitions
+    } else if (sub.name.startsWith("Generate Features")) {
+      content = `// Example feature definitions
 {
   "features": [
-    {
-      "name": "tx_count_last_hour",
-      "description": "Number of transactions made by this account in the past hour."
-    },
-    {
-      "name": "avg_tx_amount_24h",
-      "description": "Average transaction amount in the last 24 hours."
-    },
-    {
-      "name": "unique_ip_count_24h",
-      "description": "Number of unique IP addresses used by this account in the past 24 hours."
-    }
+    { "name": "tx_count_last_hour", "description": "Transactions in the past hour." },
+    { "name": "avg_tx_amount_24h", "description": "Average transaction amount in 24h." },
+    { "name": "unique_ip_count_24h", "description": "Distinct IPs used in 24h." }
   ],
-  "notes": "These features help capture abnormal transaction behaviour such as bursts of transactions or changing IP addresses."
+  "notes": "Useful to detect bursts and device/IP rotation."
 }`;
-  } else if (sub.name.startsWith("Create Rules")) {
-    content = `// Example finalized rule
+    } else if (sub.name.startsWith("Create Rules")) {
+      content = `// Example finalized rule
 {
   "rule_id": "rule_${sub.id}_1",
   "condition": "tx_count_last_hour > 3 && unique_ip_count_24h > 1",
-  "action": "Flag transaction for manual review",
-  "explanation": "Combines transaction frequency and IP diversity to detect anomalous behaviour."
+  "action": "Flag for manual review",
+  "explanation": "Frequency + IP diversity indicates abnormal behaviour."
 }`;
-  } else {
-    // default fallback
-    content = `// Preview — ${sub.name}\n${JSON.stringify({ note: 'No specific example defined' }, null, 2)}`;
-  }
+    } else {
+      content = `// Preview — ${sub.name}\n${JSON.stringify({ note: 'No specific example defined' }, null, 2)}`;
+    }
 
-  // pass the content into the preview window
-  onOpenPreview({
-    chatId: chat.id,
-    taskId,
-    subId: sub.id,
-    kind:
-      sub.name.startsWith("Generate Features") ? "feature" :
-      sub.name.startsWith("Create Rules") ? "rule" :
-      sub.name.toLowerCase().includes("contact") ? "contact" :
-      "rule",
-    title: sub.name,
-    content,
-    deepLink: null,
-  });
-};
-
+    onOpenPreview({
+      chatId: chat.id,
+      taskId,
+      subId: sub.id,
+      kind:
+        sub.name.startsWith("Generate Features") ? "feature" :
+        sub.name.startsWith("Create Rules") ? "rule" :
+        sub.name.toLowerCase().includes("contact") ? "contact" :
+        "rule",
+      title: sub.name,
+      content,
+      deepLink: null,
+    });
+  };
 
   return (
     <>
@@ -792,9 +653,9 @@ const openPreview = (taskId, sub) => {
       <div className="px-3 py-2 border-b flex items-center justify-between">
         <div>
           <div className="font-semibold text-slate-800">{chat.title}</div>
-          <div className="text-xs text-slate-500">
-            {chat.userId} • Updated {new Date(chat.updatedAt).toLocaleString()} • Model: {chat.default_model}
-          </div>
+        <div className="text-xs text-slate-500">
+          {chat.userId} • Updated {new Date(chat.updatedAt).toLocaleString()} • Model: {chat.default_model}
+        </div>
         </div>
       </div>
 
@@ -878,24 +739,25 @@ const openPreview = (taskId, sub) => {
           ))}
         </div>
       </div>
-    {/* New: preview buttons in the chat window */}
-    {readyPreviewSubs.length > 0 && (
-      <div className="px-3 py-2 border-b bg-white">
-        <span className="text-xs font-medium text-slate-600">Ready to Preview:</span>
-        <div className="flex flex-wrap gap-2 mt-1">
-          {readyPreviewSubs.map(({ taskId, sub }) => (
-            <button
-              key={sub.id}
-              className="btn btn-ghost btn-xs inline-flex items-center gap-1"
-              onClick={() => openPreview(taskId, sub)}
-            >
-              <FileText className="w-3 h-3" />
-              Preview {sub.name}
-            </button>
-          ))}
+
+      {/* Quick access: Ready previews */}
+      {readyPreviewSubs.length > 0 && (
+        <div className="px-3 py-2 border-b bg-white">
+          <span className="text-xs font-medium text-slate-600">Ready to Preview:</span>
+          <div className="flex flex-wrap gap-2 mt-1">
+            {readyPreviewSubs.map(({ taskId, sub }) => (
+              <button
+                key={sub.id}
+                className="btn btn-ghost btn-xs inline-flex items-center gap-1"
+                onClick={() => openPreview(taskId, sub)}
+              >
+                <FileText className="w-3 h-3" />
+                Preview {sub.name}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
-    )}
+      )}
 
       {/* Transcript */}
       <div className="flex-1 overflow-auto" ref={scroller}>
