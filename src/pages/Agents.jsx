@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from "react";
 import { Plus, Copy, Pencil, Rocket, Trash2, Search, Eye, X, Send } from "lucide-react";
 import AgentWizard from "../components/AgentWizard.jsx";
@@ -12,6 +13,7 @@ import {
   deleteAgent as storeDelete,
 } from "../store/agents.js";
 
+// ---- Right-side Preview Chat ------------------------------------------------
 function PreviewChat({ agent, onClose }) {
   const [messages, setMessages] = useState([
     {
@@ -28,7 +30,6 @@ function PreviewChat({ agent, onClose }) {
     if (!trimmed) return;
     const now = new Date().toLocaleTimeString();
     const userMsg = { id: crypto.randomUUID(), role: "user", text: trimmed, ts: now };
-    // Very simple mock response so Preview feels alive
     const agentMsg = {
       id: crypto.randomUUID(),
       role: "agent",
@@ -37,7 +38,7 @@ function PreviewChat({ agent, onClose }) {
         "1) Parse intent and key entities\n" +
         "2) Call tool(s) if configured (mock)\n" +
         "3) Return draft answer or action plan\n\n" +
-        "_You can wire this to your real runtime later._",
+        "_Hook this to your real runtime for live results._",
       ts: now,
     };
     setMessages((m) => [...m, userMsg, agentMsg]);
@@ -109,13 +110,14 @@ function PreviewChat({ agent, onClose }) {
           </button>
         </div>
         <div className="mt-2 text-xs text-slate-500">
-          Preview mode uses a mock response. Hook this UI to your agent runtime for live results.
+          Preview mode uses a mock response. Connect to your agent runtime for live results.
         </div>
       </div>
     </div>
   );
 }
 
+// ---- Page -------------------------------------------------------------------
 export default function Agents() {
   const [agents, setAgents] = useState([]);
   const [query, setQuery] = useState("");
@@ -125,7 +127,25 @@ export default function Agents() {
   const [previewAgentId, setPreviewAgentId] = useState(null);
 
   useEffect(() => {
-    setAgents(storeLoad());
+    let list = storeLoad();
+
+    // Seed example agent if missing
+    if (!list.some((a) => a.name === "Create Strategy Agent")) {
+      list = [
+        {
+          id: "example-create-strategy-agent",
+          name: "Create Strategy Agent",
+          desc: "Helps generate fraud strategy ideas across segments.",
+          status: "PUBLISHED",
+          updated: new Date().toLocaleDateString(),
+          createdBy: "System",
+          runs: 12, // example usage count
+        },
+        ...list,
+      ];
+    }
+
+    setAgents(list);
     const unsub = subscribe((s) => setAgents(s.agents));
     return () => unsub();
   }, []);
@@ -152,6 +172,13 @@ export default function Agents() {
     () => agents.find((a) => a.id === previewAgentId) || null,
     [agents, previewAgentId]
   );
+
+  // Helper to show runs only if published
+  const renderRuns = (a) => {
+    if (a.status !== "PUBLISHED") return "—";
+    const value = typeof a.runs === "number" ? a.runs : 0;
+    return value.toLocaleString();
+    };
 
   return (
     <div className="space-y-4">
@@ -183,7 +210,9 @@ export default function Agents() {
               <thead className="bg-slate-100 text-slate-600 border-b">
                 <tr>
                   <th className="text-left p-2">Name</th>
+                  <th className="text-left p-2">Created By</th>
                   <th className="text-left p-2">Status</th>
+                  <th className="text-right p-2"># Runs</th>
                   <th className="text-left p-2">Updated</th>
                   <th className="text-left p-2">Actions</th>
                 </tr>
@@ -195,6 +224,13 @@ export default function Agents() {
                       <div className="font-medium text-slate-800">{a.name}</div>
                       <div className="text-xs text-slate-500">{a.desc}</div>
                     </td>
+
+                    {/* Created By */}
+                    <td className="p-2 text-slate-600">
+                      {a.createdBy || "—"}
+                    </td>
+
+                    {/* Status */}
                     <td className="p-2">
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs border ${
@@ -206,7 +242,16 @@ export default function Agents() {
                         {a.status}
                       </span>
                     </td>
+
+                    {/* # Runs (only for published) */}
+                    <td className="p-2 text-right text-slate-700">
+                      {renderRuns(a)}
+                    </td>
+
+                    {/* Updated */}
                     <td className="p-2 text-slate-600">{a.updated}</td>
+
+                    {/* Actions */}
                     <td className="p-2">
                       <div className="flex flex-wrap gap-1">
                         <button className="p-1 border rounded hover:bg-slate-100" title="Clone" onClick={() => clone(a)}>
@@ -247,7 +292,7 @@ export default function Agents() {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={4} className="p-6 text-center text-slate-500">
+                    <td colSpan={6} className="p-6 text-center text-slate-500">
                       No agents match your search.
                     </td>
                   </tr>
@@ -284,7 +329,11 @@ export default function Agents() {
         }}
       />
 
-      <PromptEditor open={!!openEditorFor} onClose={() => setOpenEditorFor(null)} agentId={openEditorFor} />
+      <PromptEditor
+        open={!!openEditorFor}
+        onClose={() => setOpenEditorFor(null)}
+        agentId={openEditorFor}
+      />
     </div>
   );
 }
