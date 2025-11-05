@@ -1,18 +1,28 @@
 import React, { useMemo, useState, useEffect } from "react";
 
 /**
- * AgentWizard — Clone → Details → Advanced → Save Draft
+ * AgentWizard — Clone → Details → Advanced → System Prompt → Helper Prompts
  * Advanced includes:
  *  - Tools (external connectors like SQL, Rules, Features, Case APIs)
  *  - Sub Agents (existing agents that this agent can call)
  */
 export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
-  const [step, setStep] = useState(0); // 0: clone, 1: details, 2: advanced
+  // Steps:
+  // 0: clone
+  // 1: details
+  // 2: advanced (tools + subAgents)
+  // 3: system prompt
+  // 4: helper prompts
+  const [step, setStep] = useState(0);
+
   const [cloneId, setCloneId] = useState("");
   const [name, setName] = useState("");
   const [desc, setDesc] = useState("");
   const [tools, setTools] = useState([]); // external tools
   const [subAgents, setSubAgents] = useState([]); // other agents this one can call
+
+  const [systemPrompt, setSystemPrompt] = useState("");
+  const [helperPrompts, setHelperPrompts] = useState([]); // array of strings
 
   const base = useMemo(() => agents.find((a) => a.id === cloneId), [agents, cloneId]);
 
@@ -24,13 +34,22 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
       setDesc("");
       setTools([]);
       setSubAgents([]);
+      setSystemPrompt("");
+      setHelperPrompts([]);
     }
   }, [open]);
 
   useEffect(() => {
     if (base) {
-      setName(base.name + " Copy");
-      setDesc(base.desc || "Cloned from " + base.name);
+      setName((base.name || "Agent") + " Copy");
+      setDesc(base.desc || `Cloned from ${base.name || "agent"}`);
+      // Prefill prompts if present on the base agent
+      setSystemPrompt(base.systemPrompt || "");
+      setHelperPrompts(
+        Array.isArray(base.helperPrompts)
+          ? base.helperPrompts.map((p) => String(p))
+          : []
+      );
     }
   }, [base]);
 
@@ -44,8 +63,10 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
       desc: desc || base?.desc || "",
       status: "DRAFT",
       updated: now,
-      tools, // e.g., ["sql","rules"]
-      subAgents, // array of agent ids
+      tools,            // e.g., ["sql","rules"]
+      subAgents,        // array of agent ids
+      systemPrompt,     // string
+      helperPrompts,    // array of strings
       clonedFromId: cloneId,
     };
     onSave?.(payload);
@@ -63,6 +84,18 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
     setList((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
+  const addHelperPrompt = () => {
+    setHelperPrompts((prev) => [...prev, ""]);
+  };
+
+  const updateHelperPrompt = (idx, value) => {
+    setHelperPrompts((prev) => prev.map((p, i) => (i === idx ? value : p)));
+  };
+
+  const removeHelperPrompt = (idx) => {
+    setHelperPrompts((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/20">
       <div className="bg-white w-full max-w-2xl rounded-xl border shadow-sm">
@@ -75,12 +108,16 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
         </div>
 
         {/* Stepper */}
-        <div className="px-4 pt-3 flex items-center gap-2 text-xs">
+        <div className="px-4 pt-3 flex items-center gap-2 flex-wrap text-xs">
           <StepDot active={step >= 0}>Clone</StepDot>
           <span className="text-slate-300">›</span>
           <StepDot active={step >= 1}>Details</StepDot>
           <span className="text-slate-300">›</span>
           <StepDot active={step >= 2}>Advanced</StepDot>
+          <span className="text-slate-300">›</span>
+          <StepDot active={step >= 3}>System Prompt</StepDot>
+          <span className="text-slate-300">›</span>
+          <StepDot active={step >= 4}>Helper Prompts</StepDot>
         </div>
 
         {/* Body */}
@@ -176,7 +213,7 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
                 </div>
               </div>
 
-              {/* Summary */}
+              {/* Summary (pre-prompts) */}
               <div className="md:col-span-2 border rounded-lg">
                 <div className="px-3 py-2 border-b text-sm font-medium">Summary</div>
                 <div className="p-3 text-sm space-y-1">
@@ -184,7 +221,90 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
                   <div><span className="font-medium">Name:</span> {name || "—"}</div>
                   <div><span className="font-medium">Description:</span> {desc || "—"}</div>
                   <div><span className="font-medium">Tools:</span> {tools.length ? tools.join(", ") : "None"}</div>
-                  <div><span className="font-medium">Sub Agents:</span> {subAgents.length ? subAgents.map(id => agents.find(a=>a.id===id)?.name||id).join(", ") : "None"}</div>
+                  <div>
+                    <span className="font-medium">Sub Agents:</span>{" "}
+                    {subAgents.length
+                      ? subAgents.map((id) => agents.find((a) => a.id === id)?.name || id).join(", ")
+                      : "None"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="md:col-span-2 flex justify-end">
+                <button className="btn btn-primary" onClick={() => setStep(3)}>
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-3">
+              <div className="text-sm font-medium">System Prompt</div>
+              <p className="text-xs text-slate-500">
+                Define the core instructions and persona for this agent. This will be sent as the
+                <span className="font-medium"> system </span>message at the start of each run.
+              </p>
+              <textarea
+                className="border rounded px-2 py-2 w-full min-h-[160px]"
+                placeholder="e.g., You are a Fraud Detection Agent specializing in card-not-present transactions..."
+                value={systemPrompt}
+                onChange={(e) => setSystemPrompt(e.target.value)}
+              />
+              <div className="flex justify-end">
+                <button className="btn btn-primary" onClick={() => setStep(4)}>
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="space-y-3">
+              <div className="text-sm font-medium">Helper Prompts</div>
+              <p className="text-xs text-slate-500">
+                Add optional helper prompts the agent can reference (e.g., “Generate candidate rules,” “Summarize case context,” “Compute SQL preview”).
+              </p>
+
+              <div className="space-y-2">
+                {helperPrompts.length === 0 && (
+                  <div className="text-xs text-slate-500 border rounded px-3 py-2">
+                    No helper prompts yet. Click “Add prompt” to create one.
+                  </div>
+                )}
+                {helperPrompts.map((p, idx) => (
+                  <div key={idx} className="flex items-start gap-2">
+                    <textarea
+                      className="border rounded px-2 py-2 w-full min-h-[80px]"
+                      value={p}
+                      onChange={(e) => updateHelperPrompt(idx, e.target.value)}
+                      placeholder={`Helper Prompt #${idx + 1}`}
+                    />
+                    <button
+                      className="btn btn-ghost text-red-600 shrink-0"
+                      onClick={() => removeHelperPrompt(idx)}
+                      aria-label={`Remove helper prompt ${idx + 1}`}
+                      title="Remove"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex justify-between">
+                <button className="btn btn-ghost" onClick={addHelperPrompt}>
+                  + Add prompt
+                </button>
+                <div className="flex gap-2">
+                  <button className="btn btn-ghost" onClick={() => setStep(3)}>Back</button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={save}
+                    disabled={!name.trim() || !cloneId}
+                  >
+                    Save Draft
+                  </button>
                 </div>
               </div>
             </div>
@@ -198,13 +318,24 @@ export default function AgentWizard({ open, onClose, onSave, agents = [] }) {
             {step > 0 && (
               <button className="btn btn-ghost" onClick={() => setStep(step - 1)}>Back</button>
             )}
-            {step < 2 && (
-              <button className="btn btn-primary" onClick={() => setStep(step + 1)} disabled={(step === 0 && !cloneId) || (step === 1 && !name.trim())}>
+            {step < 4 && (
+              <button
+                className="btn btn-primary"
+                onClick={() => setStep(step + 1)}
+                disabled={
+                  (step === 0 && !cloneId) ||
+                  (step === 1 && !name.trim())
+                }
+              >
                 Next
               </button>
             )}
-            {step === 2 && (
-              <button className="btn btn-primary" onClick={save} disabled={!name.trim() || !cloneId}>
+            {step === 4 && (
+              <button
+                className="btn btn-primary"
+                onClick={save}
+                disabled={!name.trim() || !cloneId}
+              >
                 Save Draft
               </button>
             )}
